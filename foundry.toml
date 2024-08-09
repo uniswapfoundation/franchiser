@@ -8,4 +8,15 @@ via_ir = true
 optimizer_runs = 1000000
 bytecode_hash = "none"
 
+[invariant]
+  call_override = false
+  depth = 100
+  dictionary_weight = 80
+  fail_on_revert = true
+  include_push_bytes = true
+  include_storage = true
+  optimizer = false
+  runs = 25
+
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
