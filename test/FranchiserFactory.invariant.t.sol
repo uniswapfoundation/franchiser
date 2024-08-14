@@ -4,7 +4,6 @@ pragma solidity 0.8.15;
 import {Test, console2} from "forge-std/Test.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FranchiserFactory} from "src/FranchiserFactory.sol";
-import {Franchiser} from "src/Franchiser.sol";
 import {FranchiserFactoryHandler} from "test/handlers/FranchiserFactoryHandler.sol";
 import {VotingTokenConcrete} from "./VotingTokenConcrete.sol";
 
