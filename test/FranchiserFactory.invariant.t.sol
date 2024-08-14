@@ -23,7 +23,7 @@ contract FranchiseFactoryInvariantTest is Test {
         targetContract(address(handler));
     }
 
-    function invariant_fund_franchiser_code_size_non_zero() external view {
+    function invariant_Franchiser_code_size_non_zero() external view {
         assertGt(address(handler.franchiser()).code.length, 0);
     }
 }
