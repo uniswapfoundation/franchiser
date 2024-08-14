@@ -28,7 +28,6 @@ contract FranchiserFactoryHandler is Test {
 
     function handler_fund(address _delegator, address _delegatee, uint256 _amount) external {
         vm.assume(_validActorAddress(_delegator));
-        vm.assume(_validActorAddress(_delegatee));
         _amount = _boundAmount(_amount);
         VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         votingToken.mint(_delegator, _amount);
@@ -40,7 +39,6 @@ contract FranchiserFactoryHandler is Test {
 
     function handler_recall(address _delegator, address _delegatee, uint256 _amount) external {
         vm.assume(_validActorAddress(_delegator));
-        vm.assume(_validActorAddress(_delegatee));
         _amount = _boundAmount(_amount);
         VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         votingToken.mint(_delegator, _amount);
