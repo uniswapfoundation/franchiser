@@ -26,7 +26,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     function _boundAmount(uint256 _amount) internal pure returns (uint256) {
-        return bound(_amount, 0, 100000e18);
+        return bound(_amount, 0, 100_000_000e18);
     }
 
     function _removeFranchiser(uint256 _index) public {
