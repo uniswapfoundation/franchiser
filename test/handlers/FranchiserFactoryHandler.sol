@@ -2,21 +2,23 @@
 pragma solidity 0.8.15;
 
 import {Test, console2} from "forge-std/Test.sol";
-
+import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {VotingTokenConcrete} from "test/VotingTokenConcrete.sol";
 import {FranchiserFactory} from "src/FranchiserFactory.sol";
 import {Franchiser} from "src/Franchiser.sol";
 
 contract FranchiserFactoryHandler is Test {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
     FranchiserFactory public factory;
     Franchiser public franchiser;
 
-    // Handler ghost array to contain all the funded franchisers created by handler_fund
-    Franchiser[] public fundedFranchisers;
+    // Handler ghost AddressSet to contain all the funded franchisers created by handler_fund
+    EnumerableSet.AddressSet private fundedFranchisers;
 
-    // Handler ghost array to contain all of the delegators that have recalled their franchisers
-    address[] public recalledDelegators;
+    // Handler ghost AddressSet to contain all of the delegators that have recalled their franchisers
+    EnumerableSet.AddressSet private recalledDelegators;
 
     constructor(FranchiserFactory _factory) {
         factory = _factory;
@@ -24,44 +26,24 @@ contract FranchiserFactoryHandler is Test {
     }
 
     function sumRecalledDelegatorsBalances() public view returns (uint256 sum) {
-        for (uint256 i = 0; i < recalledDelegators.length; i++) {
-            sum += factory.votingToken().balanceOf(recalledDelegators[i]);
+        sum = 0;
+        for (uint256 i = 0; i < recalledDelegators.length(); i++) {
+            sum += factory.votingToken().balanceOf(recalledDelegators.at(i));
         }
     }
 
     function sumFundedFranchisersBalances() public view returns (uint256 sum) {
-        for (uint256 i = 0; i < fundedFranchisers.length; i++) {
-            sum += factory.votingToken().balanceOf(address(fundedFranchisers[i]));
-        }
-    }
-
-    function _removeFranchiser(uint256 _index) public {
-        require(_index < fundedFranchisers.length, "Index out of bounds");
-
-        for (uint256 i = _index; i < fundedFranchisers.length - 1; i++) {
-            fundedFranchisers[i] = fundedFranchisers[i + 1];
-        }
-        fundedFranchisers.pop();
-    }
-
-    function isRecalledDelegatorInArray(address delegator) internal view returns (bool) {
-        for (uint256 i = 0; i < recalledDelegators.length; i++) {
-            if (recalledDelegators[i] == delegator) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function addRecalledDelegator(address delegator) internal {
-        if (!isRecalledDelegatorInArray(delegator)) {
-            recalledDelegators.push(delegator);
+        for (uint256 i = 0; i < fundedFranchisers.length(); i++) {
+            sum += factory.votingToken().balanceOf(fundedFranchisers.at(i));
         }
     }
 
     function _validActorAddress(address _address) internal view returns (bool valid) {
-        valid =
-            (_address != address(0)) && (_address != address(factory.votingToken()) && (_address != address(factory)));
+        valid = (_address != address(0))
+            && (
+                _address != address(factory.votingToken()) && (_address != address(factory))
+                    && (!fundedFranchisers.contains(_address))
+            );
     }
 
     function _boundAmount(uint256 _amount) internal pure returns (uint256) {
@@ -77,19 +59,19 @@ contract FranchiserFactoryHandler is Test {
         votingToken.approve(address(factory), _amount);
         franchiser = factory.fund(_delegatee, _amount);
         vm.stopPrank();
-        fundedFranchisers.push(franchiser);
+        fundedFranchisers.add(address(franchiser));
     }
 
     function handler_recall(uint256 _fundedFranchiserIndex) external {
-        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length - 1);
-        Franchiser _fundedFranchiser = fundedFranchisers[_fundedFranchiserIndex];
+        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
+        Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegatee = _fundedFranchiser.delegatee();
         address _delegator = _fundedFranchiser.delegator();
         vm.prank(_delegator);
         factory.recall(_delegatee, _delegator);
 
         // remove the franchiser from the fundedFranchisers array and save the delegator so we can check the balances invariant
-        _removeFranchiser(_fundedFranchiserIndex);
-        addRecalledDelegator(_delegator);
+        fundedFranchisers.remove(address(_fundedFranchiser));
+        recalledDelegators.add(_delegator);
     }
 }
