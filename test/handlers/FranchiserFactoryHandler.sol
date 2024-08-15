@@ -51,6 +51,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     function handler_fund(address _delegator, address _delegatee, uint256 _amount) external {
+        console2.log("In handler_fund");
         vm.assume(_validActorAddress(_delegator));
         _amount = _boundAmount(_amount);
         VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
@@ -62,7 +63,30 @@ contract FranchiserFactoryHandler is Test {
         fundedFranchisers.add(address(franchiser));
     }
 
+    function handler_fundMany(address _delegator, uint8 _numberOfDelegatees, uint256 _baseAmount) external {
+        _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
+        console2.log("In handler_fundMany");
+        console2.log("Delegator: %s", _delegator);
+        console2.log("Number of Delegatees: %s", _numberOfDelegatees);
+        console2.log("Base Amount: %s", _baseAmount);
+        vm.assume(_validActorAddress(_delegator));
+        address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
+        uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
+        for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            string memory _delegatee = string(abi.encodePacked("delegatee", i, _baseAmount));
+            _delegateesForFundMany[i] = makeAddr(_delegatee);
+            _amountsForFundMany[i] = _boundAmount(_baseAmount + i);
+        }
+        vm.startPrank(_delegator);
+        Franchiser[] memory _franchisers = factory.fundMany(_delegateesForFundMany, _amountsForFundMany);
+        vm.stopPrank();
+        for (uint256 j = 0; j < _franchisers.length; j++) {
+            fundedFranchisers.add(address(_franchisers[j]));
+        }
+    }
+
     function handler_recall(uint256 _fundedFranchiserIndex) external {
+        console2.log("In handler_recall");
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegatee = _fundedFranchiser.delegatee();
