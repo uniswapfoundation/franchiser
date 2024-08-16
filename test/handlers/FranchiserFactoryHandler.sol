@@ -65,6 +65,8 @@ contract FranchiserFactoryHandler is Test {
 
     function handler_fundMany(address _delegator, uint8 _numberOfDelegatees, uint256 _baseAmount) external {
         _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
+        _baseAmount = _bound(_baseAmount, 1, 10_000e18);
+        VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         console2.log("In handler_fundMany");
         console2.log("Delegator: %s", _delegator);
         console2.log("Number of Delegatees: %s", _numberOfDelegatees);
@@ -72,12 +74,17 @@ contract FranchiserFactoryHandler is Test {
         vm.assume(_validActorAddress(_delegator));
         address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
+        uint256 _totalAmountToMintAndApprove = 0;
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            uint256 _amount = _baseAmount + i;
             string memory _delegatee = string(abi.encodePacked("delegatee", i, _baseAmount));
             _delegateesForFundMany[i] = makeAddr(_delegatee);
-            _amountsForFundMany[i] = _boundAmount(_baseAmount + i);
+            _amountsForFundMany[i] = _amount;
+            _totalAmountToMintAndApprove += _amount;
         }
+        votingToken.mint(_delegator, _totalAmountToMintAndApprove);
         vm.startPrank(_delegator);
+        votingToken.approve(address(factory), _totalAmountToMintAndApprove);
         Franchiser[] memory _franchisers = factory.fundMany(_delegateesForFundMany, _amountsForFundMany);
         vm.stopPrank();
         for (uint256 j = 0; j < _franchisers.length; j++) {
