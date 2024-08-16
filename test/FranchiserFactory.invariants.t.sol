@@ -16,10 +16,11 @@ contract FranchiseFactoryInvariantTest is Test {
         token = new VotingTokenConcrete();
         factory = new FranchiserFactory(IVotingToken(address(token)));
         handler = new FranchiserFactoryHandler(factory);
-        bytes4[] memory selectors = new bytes4[](3);
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = FranchiserFactoryHandler.handler_fundMany.selector;
-        selectors[1] = FranchiserFactoryHandler.handler_recall.selector;
-        selectors[2] = FranchiserFactoryHandler.handler_fund.selector;
+        selectors[1] = FranchiserFactoryHandler.handler_recallMany.selector;
+        selectors[2] = FranchiserFactoryHandler.handler_recall.selector;
+        selectors[3] = FranchiserFactoryHandler.handler_fund.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
@@ -28,7 +29,15 @@ contract FranchiseFactoryInvariantTest is Test {
         assertGt(address(handler.franchiser()).code.length, 0);
     }
 
-    function invariant_FranchiserAndDeployersBalanceSumMatchesTotalSupply() external view {
-        assertEq(token.totalSupply(), handler.sumRecalledDelegatorsBalances() + handler.sumFundedFranchisersBalances());
+    function invariant_FranchiserAndDeployersRecalledBalanceSumMatchesTotalSupply() external view {
+        handler.callSummary();
+        assertEq(
+            token.totalSupply(), handler.totalRecalledFromFundedFranchisers() + handler.sumFundedFranchisersBalances()
+        );
+    }
+
+    // Used to see distribution of non-reverting calls
+    function invariant_callSummary() public view {
+        handler.callSummary();
     }
 }
