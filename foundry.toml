@@ -16,7 +16,7 @@ bytecode_hash = "none"
   include_push_bytes = true
   include_storage = true
   optimizer = false
-  runs = 50
+  runs = 25
 
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
