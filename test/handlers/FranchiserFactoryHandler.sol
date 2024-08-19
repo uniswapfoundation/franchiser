@@ -19,8 +19,11 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost AddressSet to contain all the funded franchisers created by handler_fund
     EnumerableSet.AddressSet private fundedFranchisers;
 
-    // Ghost variable to keep track of amount recalled from funded franchisers
-    uint256 public totalRecalledFromFundedFranchisers = 0;
+    // Handler ghost array to contain all the funded franchisers created by the last call to handler_fundMany
+    Franchiser[] private lastFundedFranchisersArray;
+
+    // Ghost variable address to receive of the total amount of funds recalled from franchisers
+    address public targetAddressForRecalledFunds = makeAddr("targetAddressForRecalledFunds");
 
     constructor(FranchiserFactory _factory) {
         factory = _factory;
@@ -83,50 +86,66 @@ contract FranchiserFactoryHandler is Test {
         votingToken.mint(_delegator, _totalAmountToMintAndApprove);
         vm.startPrank(_delegator);
         votingToken.approve(address(factory), _totalAmountToMintAndApprove);
-        Franchiser[] memory _franchisers = factory.fundMany(_delegateesForFundMany, _amountsForFundMany);
+
+        // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
+        delete lastFundedFranchisersArray;
+        lastFundedFranchisersArray = factory.fundMany(_delegateesForFundMany, _amountsForFundMany);
         vm.stopPrank();
-        for (uint256 j = 0; j < _franchisers.length; j++) {
-            fundedFranchisers.add(address(_franchisers[j]));
+
+        // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
+        for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
+            fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
         }
     }
 
     function handler_recall(uint256 _fundedFranchiserIndex) external countCall("handler_recall") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
         VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegatee = _fundedFranchiser.delegatee();
         address _delegator = _fundedFranchiser.delegator();
+        uint256 _amount = votingToken.balanceOf(address(_fundedFranchiser));
 
-        // update the total recalled for checking the balances invariant and
-        totalRecalledFromFundedFranchisers += votingToken.balanceOf(address(_fundedFranchiser));
-
-        // do the recall of delegated funds
-        vm.prank(_delegator);
+        // do the recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
+        vm.startPrank(_delegator);
         factory.recall(_delegatee, _delegator);
+        votingToken.transfer(targetAddressForRecalledFunds, _amount);
+        vm.stopPrank();
 
         // remove the franchiser from the fundedFranchisers array
         fundedFranchisers.remove(address(_fundedFranchiser));
     }
 
-    function handler_recallMany(uint256 _numberFranchiersToRecall) external countCall("handler_recallMany") {
-        if (fundedFranchisers.length() < 3) {
+    function handler_recallMany(uint256 _numberFranchisersToRecall) external countCall("handler_recallMany") {
+        if (lastFundedFranchisersArray.length < 3) {
+            delete lastFundedFranchisersArray;
             return;
         }
         VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
-        _numberFranchiersToRecall = bound(_numberFranchiersToRecall, 1, fundedFranchisers.length() - 2);
-        address[] memory _delegateesForRecallMany = new address[](_numberFranchiersToRecall);
-        address[] memory _delegatorsForRecallMany = new address[](_numberFranchiersToRecall);
+        _numberFranchisersToRecall = bound(_numberFranchisersToRecall, 1, lastFundedFranchisersArray.length - 1);
 
-        // get the _numberFranchiersToRecall franchisers from the fundedFranchisers array
-        for (uint256 i = 0; i < _numberFranchiersToRecall; i++) {
-            Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(i));
+        address[] memory _delegateesForRecallMany = new address[](_numberFranchisersToRecall);
+        address[] memory _targetsForRecallMany = new address[](_numberFranchisersToRecall);
+        uint256[] memory _amountsForRecallMany = new uint256[](_numberFranchisersToRecall);
+        uint256 _totalAmountToRecall = 0;
+
+        for (uint256 i = 0; i < _numberFranchisersToRecall; i++) {
+            Franchiser _fundedFranchiser = Franchiser(lastFundedFranchisersArray[i]);
             _delegateesForRecallMany[i] = _fundedFranchiser.delegatee();
-            _delegatorsForRecallMany[i] = _fundedFranchiser.delegator();
-            fundedFranchisers.remove(address(_fundedFranchiser));
-            totalRecalledFromFundedFranchisers += votingToken.balanceOf(address(_fundedFranchiser));
+            _targetsForRecallMany[i] = targetAddressForRecalledFunds;
+            uint256 _amount = votingToken.balanceOf(address(_fundedFranchiser));
+            _amountsForRecallMany[i] = _amount;
+            _totalAmountToRecall += _amount;
+            fundedFranchisers.remove(address(lastFundedFranchisersArray[i]));
         }
-        vm.prank(_delegatorsForRecallMany[0]);
-        factory.recallMany(_delegateesForRecallMany, _delegatorsForRecallMany);
+        vm.prank(lastFundedFranchisersArray[0].delegator());
+        factory.recallMany(_delegateesForRecallMany, _targetsForRecallMany);
+
+        // empty the lastFundedFranchisersArray, so handler_recallMany can only be called again after a new handler_fundMany
+        delete lastFundedFranchisersArray;
     }
 
     function callSummary() external view {

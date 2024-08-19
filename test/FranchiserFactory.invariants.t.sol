@@ -32,7 +32,8 @@ contract FranchiseFactoryInvariantTest is Test {
     function invariant_FranchiserAndDeployersRecalledBalanceSumMatchesTotalSupply() external view {
         handler.callSummary();
         assertEq(
-            token.totalSupply(), handler.totalRecalledFromFundedFranchisers() + handler.sumFundedFranchisersBalances()
+            token.totalSupply(),
+            token.balanceOf(handler.targetAddressForRecalledFunds()) + handler.sumFundedFranchisersBalances()
         );
     }
 
