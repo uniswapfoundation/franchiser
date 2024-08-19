@@ -24,11 +24,6 @@ contract FranchiserFactoryHandler is Test {
 
     // Ghost variable address to receive of the total amount of funds recalled from franchisers
     address public targetAddressForRecalledFunds = makeAddr("targetAddressForRecalledFunds");
-    FranchiserFactory public factory;
-    Franchiser public franchiser;
-
-    // Handler ghost array to contain all the funded franchisers created by handler_fund
-    Franchiser[] public fundedFranchisers;
 
     constructor(FranchiserFactory _factory) {
         factory = _factory;
