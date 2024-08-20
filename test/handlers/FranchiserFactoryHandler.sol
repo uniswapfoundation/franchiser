@@ -158,6 +158,39 @@ contract FranchiserFactoryHandler is Test {
         fundedFranchisers.add(address(franchiser));
     }
 
+    function handler_permitAndFundMany(uint256 _delegatorPrivateKey, uint8 _numberOfDelegatees, uint256 _amount)
+        external
+        countCall("handler_permitAndFundMany")
+    {
+        _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
+        _amount = _bound(_amount, 1, 10_000e18);
+        (address _delegator, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) =
+            votingToken.getPermitSignature(vm, _delegatorPrivateKey, address(factory), _amount * _numberOfDelegatees);
+        address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
+        uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
+        uint256 _totalAmountToMintAndApprove = 0;
+        for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            string memory _delegatee = string(abi.encodePacked("delegatee", i, _amount));
+            _delegateesForFundMany[i] = makeAddr(_delegatee);
+            _amountsForFundMany[i] = _amount;
+            _totalAmountToMintAndApprove += _amount;
+        }
+        votingToken.mint(_delegator, _totalAmountToMintAndApprove);
+        vm.startPrank(_delegator);
+        votingToken.approve(address(factory), _totalAmountToMintAndApprove);
+
+        // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
+        delete lastFundedFranchisersArray;
+        lastFundedFranchisersArray =
+            factory.permitAndFundMany(_delegateesForFundMany, _amountsForFundMany, _deadline, _v, _r, _s);
+        vm.stopPrank();
+
+        // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
+        for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
+            fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
+        }
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -166,6 +199,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("handler_recall", calls["handler_recall"]);
         console2.log("handler_recallMany", calls["handler_recallMany"]);
         console2.log("handler_permitAndFund", calls["handler_permitAndFund"]);
+        console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"]);
         console2.log("-------------------\n");
     }
 }
