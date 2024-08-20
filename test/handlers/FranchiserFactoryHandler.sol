@@ -13,6 +13,7 @@ contract FranchiserFactoryHandler is Test {
 
     FranchiserFactory public factory;
     Franchiser public franchiser;
+    VotingTokenConcrete public votingToken;
 
     mapping(bytes32 => uint256) public calls;
 
@@ -27,7 +28,8 @@ contract FranchiserFactoryHandler is Test {
 
     constructor(FranchiserFactory _factory) {
         factory = _factory;
-        franchiser = new Franchiser(IVotingToken(address(factory.votingToken())));
+        votingToken = VotingTokenConcrete(address(factory.votingToken()));
+        franchiser = new Franchiser(IVotingToken(address(votingToken)));
     }
 
     modifier countCall(bytes32 key) {
@@ -44,7 +46,7 @@ contract FranchiserFactoryHandler is Test {
     function _validActorAddress(address _address) internal view returns (bool valid) {
         valid = (_address != address(0))
             && (
-                _address != address(factory.votingToken()) && (_address != address(factory))
+                _address != address(votingToken) && (_address != address(factory))
                     && (!fundedFranchisers.contains(_address))
             );
     }
@@ -56,7 +58,6 @@ contract FranchiserFactoryHandler is Test {
     function handler_fund(address _delegator, address _delegatee, uint256 _amount) external countCall("handler_fund") {
         vm.assume(_validActorAddress(_delegator));
         _amount = _boundAmount(_amount);
-        VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         votingToken.mint(_delegator, _amount);
         vm.startPrank(_delegator);
         votingToken.approve(address(factory), _amount);
@@ -71,7 +72,6 @@ contract FranchiserFactoryHandler is Test {
     {
         _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
         _baseAmount = _bound(_baseAmount, 1, 10_000e18);
-        VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         vm.assume(_validActorAddress(_delegator));
         address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
@@ -102,7 +102,6 @@ contract FranchiserFactoryHandler is Test {
         if (fundedFranchisers.length() == 0) {
             return;
         }
-        VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegatee = _fundedFranchiser.delegatee();
@@ -124,7 +123,6 @@ contract FranchiserFactoryHandler is Test {
             delete lastFundedFranchisersArray;
             return;
         }
-        VotingTokenConcrete votingToken = VotingTokenConcrete(address(factory.votingToken()));
         _numberFranchisersToRecall = bound(_numberFranchisersToRecall, 1, lastFundedFranchisersArray.length - 1);
 
         address[] memory _delegateesForRecallMany = new address[](_numberFranchisersToRecall);
@@ -148,6 +146,18 @@ contract FranchiserFactoryHandler is Test {
         delete lastFundedFranchisersArray;
     }
 
+    function handler_permitAndFund(uint256 _delegatorPrivateKey, address _delegatee, uint256 _amount)
+        external
+        countCall("handler_permitAndFund")
+    {
+        (address _delegator, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) =
+            votingToken.getPermitSignature(vm, _delegatorPrivateKey, address(factory), _amount);
+        votingToken.mint(_delegator, _amount);
+        vm.prank(_delegator);
+        franchiser = factory.permitAndFund(_delegatee, _amount, _deadline, _v, _r, _s);
+        fundedFranchisers.add(address(franchiser));
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -155,6 +165,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("handler_fundMany", calls["handler_fundMany"]);
         console2.log("handler_recall", calls["handler_recall"]);
         console2.log("handler_recallMany", calls["handler_recallMany"]);
+        console2.log("handler_permitAndFund", calls["handler_permitAndFund"]);
         console2.log("-------------------\n");
     }
 }
