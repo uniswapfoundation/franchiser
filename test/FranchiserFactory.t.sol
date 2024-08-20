@@ -101,6 +101,20 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         assertEq(votingToken.balanceOf(_delegator), _delegatorBalanceBefore - _amount);
     }
 
+    function testFuzz_FundFailsWhenBalanceTooLow(address _delegator, address _delegatee, uint256 _amount) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        _amount = bound(_amount, 10, 100_000_000e18);
+
+        votingToken.mint(_delegator, _amount - 10);
+
+        vm.startPrank(_delegator);
+        votingToken.approve(address(franchiserFactory), _amount);
+        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        franchiserFactory.fund(_delegatee, _amount);
+        vm.stopPrank();
+    }
+
     function testFundManyRevertsArrayLengthMismatch() public {
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1));
         franchiserFactory.fundMany(new address[](0), new uint256[](1));
