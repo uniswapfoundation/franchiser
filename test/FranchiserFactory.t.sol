@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test, console2} from "forge-std/Test.sol";
 import {IFranchiserFactoryErrors} from "../src/interfaces/FranchiserFactory/IFranchiserFactoryErrors.sol";
 import {IFranchiserEvents} from "../src/interfaces/Franchiser/IFranchiserEvents.sol";
+import {IFranchiserErrors} from "../src/interfaces/Franchiser/IFranchiserErrors.sol";
 import {VotingTokenConcrete} from "./VotingTokenConcrete.sol";
 import {IVotingToken} from "../src/interfaces/IVotingToken.sol";
 import {FranchiserFactory} from "../src/FranchiserFactory.sol";
@@ -99,6 +100,20 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore + _amount);
         assertEq(votingToken.getVotes(_delegatee), _delegateeVotesBefore + _amount);
         assertEq(votingToken.balanceOf(_delegator), _delegatorBalanceBefore - _amount);
+    }
+
+    function testFuzz_FundFailsWhenDelegateeIsAddressZero(address _delegator, uint256 _amount) public {
+        vm.assume(_validActorAddress(_delegator));
+        address _delegatee = address(0);
+        _amount = _boundAmount(_amount);
+
+        votingToken.mint(_delegator, _amount);
+
+        vm.startPrank(_delegator);
+        votingToken.approve(address(franchiserFactory), _amount);
+        vm.expectRevert(IFranchiserErrors.NoDelegatee.selector);
+        franchiserFactory.fund(_delegatee, _amount);
+        vm.stopPrank();
     }
 
     function testFuzz_FundFailsWhenBalanceTooLow(address _delegator, address _delegatee, uint256 _amount) public {
