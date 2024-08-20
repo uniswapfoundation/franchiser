@@ -66,20 +66,17 @@ contract FranchiserFactoryHandler is Test {
         fundedFranchisers.add(address(franchiser));
     }
 
-    function handler_fundMany(address _delegator, uint8 _numberOfDelegatees, uint256 _baseAmount)
+    function handler_fundMany(address _delegator, address[] memory _delegatees, uint256 _baseAmount)
         external
         countCall("handler_fundMany")
     {
-        _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
+        uint256 _numberOfDelegatees = _delegatees.length;
         _baseAmount = _bound(_baseAmount, 1, 10_000e18);
         vm.assume(_validActorAddress(_delegator));
-        address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
         uint256 _totalAmountToMintAndApprove = 0;
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
             uint256 _amount = _baseAmount + i;
-            string memory _delegatee = string(abi.encodePacked("delegatee", i, _baseAmount));
-            _delegateesForFundMany[i] = makeAddr(_delegatee);
             _amountsForFundMany[i] = _amount;
             _totalAmountToMintAndApprove += _amount;
         }
@@ -89,7 +86,7 @@ contract FranchiserFactoryHandler is Test {
 
         // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
         delete lastFundedFranchisersArray;
-        lastFundedFranchisersArray = factory.fundMany(_delegateesForFundMany, _amountsForFundMany);
+        lastFundedFranchisersArray = factory.fundMany(_delegatees, _amountsForFundMany);
         vm.stopPrank();
 
         // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
@@ -158,20 +155,17 @@ contract FranchiserFactoryHandler is Test {
         fundedFranchisers.add(address(franchiser));
     }
 
-    function handler_permitAndFundMany(uint256 _delegatorPrivateKey, uint8 _numberOfDelegatees, uint256 _amount)
+    function handler_permitAndFundMany(uint256 _delegatorPrivateKey, address[] memory _delegatees, uint256 _amount)
         external
         countCall("handler_permitAndFundMany")
     {
-        _numberOfDelegatees = uint8(bound(_numberOfDelegatees, 2, 255));
+        uint256 _numberOfDelegatees = _delegatees.length;
         _amount = _bound(_amount, 1, 10_000e18);
         (address _delegator, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) =
             votingToken.getPermitSignature(vm, _delegatorPrivateKey, address(factory), _amount * _numberOfDelegatees);
-        address[] memory _delegateesForFundMany = new address[](_numberOfDelegatees);
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
         uint256 _totalAmountToMintAndApprove = 0;
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
-            string memory _delegatee = string(abi.encodePacked("delegatee", i, _amount));
-            _delegateesForFundMany[i] = makeAddr(_delegatee);
             _amountsForFundMany[i] = _amount;
             _totalAmountToMintAndApprove += _amount;
         }
@@ -181,8 +175,7 @@ contract FranchiserFactoryHandler is Test {
 
         // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
         delete lastFundedFranchisersArray;
-        lastFundedFranchisersArray =
-            factory.permitAndFundMany(_delegateesForFundMany, _amountsForFundMany, _deadline, _v, _r, _s);
+        lastFundedFranchisersArray = factory.permitAndFundMany(_delegatees, _amountsForFundMany, _deadline, _v, _r, _s);
         vm.stopPrank();
 
         // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
