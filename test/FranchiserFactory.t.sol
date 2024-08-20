@@ -176,6 +176,24 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         assertEq(votingToken.getVotes(Utils.bob), 0);
     }
 
+    function testFuzz_RecallDelegatorBalanceUpdated(address _delegator, address _delegatee, uint256 _amount) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        _amount = _boundAmount(_amount);
+
+        votingToken.mint(_delegator, _amount);
+
+        vm.startPrank(_delegator);
+        votingToken.approve(address(franchiserFactory), _amount);
+        franchiserFactory.fund(_delegatee, _amount);
+
+        uint256 _delegatorBalanceBeforeRecall = votingToken.balanceOf(_delegator);
+        franchiserFactory.recall(_delegatee, _delegator);
+        vm.stopPrank();
+
+        assertEq(votingToken.balanceOf(_delegator), _delegatorBalanceBeforeRecall + _amount);
+    }
+
     function testRecallManyRevertsArrayLengthMismatch() public {
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1));
         franchiserFactory.recallMany(new address[](0), new address[](1));
