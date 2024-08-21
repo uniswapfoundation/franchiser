@@ -17,6 +17,14 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
     Franchiser private franchiserImplementation;
     Franchiser private franchiser;
 
+    function _validActorAddress(address _address) internal view returns (bool valid) {
+        valid = (_address != address(0)) && (_address != address(votingToken));
+    }
+
+    function _boundAmount(uint256 _amount) internal pure returns (uint256) {
+        return bound(_amount, 0, 100_000_000e18);
+    }
+
     function setUp() public {
         votingToken = new VotingTokenConcrete();
         franchiserImplementation = new Franchiser(
@@ -201,6 +209,33 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
 
         assertEq(votingToken.balanceOf(address(franchiser)), 50);
         assertEq(votingToken.balanceOf(address(returnedFranchiser)), 50);
+    }
+
+    function testFuzz_SubDelegateBalancesUpdated(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        _amount = _boundAmount(_amount);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount);
+
+        Franchiser _expectedSubFranchiser = franchiser.getFranchiser(_subDelegatee);
+        uint256 _subFranchiserBalanceBefore = votingToken.balanceOf(address(_expectedSubFranchiser));
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(franchiser));
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+        uint256 _subDelegateeVotingPowerBefore = votingToken.getVotes(_subDelegatee);
+        vm.prank(_delegatee);
+        Franchiser subFranchiser = franchiser.subDelegate(_subDelegatee, _amount);
+
+        assertEq(votingToken.balanceOf(address(subFranchiser)), _subFranchiserBalanceBefore + _amount);
+        assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore - _amount);
+        assertEq(votingToken.getVotes(_delegatee), _delegateeVotingPowerBefore - _amount);
+        assertEq(votingToken.getVotes(_subDelegatee), _subDelegateeVotingPowerBefore + _amount);
     }
 
     function testSubDelegateManyRevertsArrayLengthMismatch() public {
