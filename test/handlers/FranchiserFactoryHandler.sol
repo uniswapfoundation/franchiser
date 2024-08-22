@@ -15,7 +15,11 @@ contract FranchiserFactoryHandler is Test {
     Franchiser public franchiser;
     VotingTokenConcrete public votingToken;
 
-    mapping(bytes32 => uint256) public calls;
+    struct CallCounts {
+        uint256 calls;
+    }
+
+    mapping(bytes32 => CallCounts) public calls;
 
     // Handler ghost AddressSet to contain all the funded franchisers created by handler_fund
     EnumerableSet.AddressSet private fundedFranchisers;
@@ -33,7 +37,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     modifier countCall(bytes32 key) {
-        calls[key]++;
+        calls[key].calls++;
         _;
     }
 
@@ -187,12 +191,12 @@ contract FranchiserFactoryHandler is Test {
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
-        console2.log("handler_fund", calls["handler_fund"]);
-        console2.log("handler_fundMany", calls["handler_fundMany"]);
-        console2.log("handler_recall", calls["handler_recall"]);
-        console2.log("handler_recallMany", calls["handler_recallMany"]);
-        console2.log("handler_permitAndFund", calls["handler_permitAndFund"]);
-        console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"]);
+        console2.log("handler_fund", calls["handler_fund"].calls);
+        console2.log("handler_fundMany", calls["handler_fundMany"].calls);
+        console2.log("handler_recall", calls["handler_recall"].calls);
+        console2.log("handler_recallMany", calls["handler_recallMany"].calls);
+        console2.log("handler_permitAndFund", calls["handler_permitAndFund"].calls);
+        console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"].calls);
         console2.log("-------------------\n");
     }
 }
