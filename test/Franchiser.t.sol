@@ -339,6 +339,30 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(votingToken.balanceOf(address(franchiser)), 100);
     }
 
+    function testFuzz_UnSubDelegateBalanceUpdated(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        _amount = _boundAmount(_amount);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount);
+
+        vm.startPrank(_delegatee);
+        Franchiser subFranchiser = franchiser.subDelegate(_subDelegatee, _amount);
+        uint256 _subFranchiserBalanceBefore = votingToken.balanceOf(address(subFranchiser));
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(franchiser));
+        franchiser.unSubDelegate(_subDelegatee);
+        vm.stopPrank();
+
+        assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore + _amount);
+        assertEq(votingToken.balanceOf(address(subFranchiser)), _subFranchiserBalanceBefore - _amount);
+    }
+
     function testUnSubDelegateMany() public {
         franchiser.initialize(Utils.alice, Utils.bob, 2);
 
