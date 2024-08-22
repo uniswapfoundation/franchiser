@@ -238,6 +238,24 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(votingToken.getVotes(_subDelegatee), _subDelegateeVotingPowerBefore + _amount);
     }
 
+    function testFuzz_SubDelegateFailsWhenFranchiserBalanceTooLow(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        _amount = bound(_amount, 1, 100_000_000e18);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount - 1);
+
+        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.prank(_delegatee);
+        franchiser.subDelegate(_subDelegatee, _amount);
+    }
+
     function testSubDelegateManyRevertsArrayLengthMismatch() public {
         franchiser.initialize(Utils.alice, Utils.bob, 2);
 
