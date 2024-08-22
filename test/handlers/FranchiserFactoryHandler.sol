@@ -109,7 +109,7 @@ contract FranchiserFactoryHandler is Test {
         address _delegator = _fundedFranchiser.delegator();
         uint256 _amount = votingToken.balanceOf(address(_fundedFranchiser));
 
-        // do the recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
+        // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
         vm.startPrank(_delegator);
         factory.recall(_delegatee, _delegator);
         votingToken.transfer(targetAddressForRecalledFunds, _amount);
@@ -182,7 +182,7 @@ contract FranchiserFactoryHandler is Test {
         lastFundedFranchisersArray = factory.permitAndFundMany(_delegatees, _amountsForFundMany, _deadline, _v, _r, _s);
         vm.stopPrank();
 
-        // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
+        // add the created franchisers to the fundedFranchisers AddressSet for tracking total invariants
         for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
             fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
         }
