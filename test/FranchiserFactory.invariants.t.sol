@@ -31,7 +31,7 @@ contract FranchiseFactoryInvariantTest is Test {
         assertGt(address(handler.franchiser()).code.length, 0);
     }
 
-    function invariant_FranchiserAndDeployersRecalledBalanceSumMatchesTotalSupply() external view {
+    function invariant_Franchisers_and_recalled_balance_sum_matches_total_supply() external view {
         handler.callSummary();
         assertEq(
             token.totalSupply(),
