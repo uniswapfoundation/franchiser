@@ -75,7 +75,7 @@ contract FranchiserFactoryHandler is Test {
         countCall("handler_fundMany")
     {
         uint256 _numberOfDelegatees = _delegatees.length;
-        _baseAmount = _bound(_baseAmount, 1, 10_000e18);
+        _baseAmount = _boundAmount(_baseAmount);
         vm.assume(_validActorAddress(_delegator));
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
         uint256 _totalAmountToMintAndApprove = 0;
