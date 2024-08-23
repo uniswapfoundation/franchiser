@@ -238,7 +238,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(votingToken.getVotes(_subDelegatee), _subDelegateeVotingPowerBefore + _amount);
     }
 
-    function testFuzz_SubDelegateFailsWhenFranchiserBalanceTooLow(
+    function testFuzz_RevertIf_SubDelegateCalledWithFranchiserBalanceTooLow(
         address _delegator,
         address _delegatee,
         address _subDelegatee,
