@@ -242,14 +242,17 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         address _delegator,
         address _delegatee,
         address _subDelegatee,
-        uint256 _amount
+        uint256 _amount,
+        uint256 _delta
     ) public {
         vm.assume(_validActorAddress(_delegator));
         vm.assume(_delegatee != address(0));
         vm.assume(_subDelegatee != address(0));
-        _amount = bound(_amount, 1, 100_000_000e18);
+        vm.assume((_amount >= _delta) && (_amount <= 100_000_000e18));
+        _delta = bound(_delta, 1, 100_000_000e18);
+        _amount = bound(_amount, _delta, 100_000_000e18);
         franchiser.initialize(_delegator, _delegatee, 1);
-        votingToken.mint(address(franchiser), _amount - 1);
+        votingToken.mint(address(franchiser), _amount - _delta);
 
         vm.expectRevert(bytes("TRANSFER_FAILED"));
         vm.prank(_delegatee);

@@ -116,12 +116,14 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.stopPrank();
     }
 
-    function testFuzz_FundFailsWhenBalanceTooLow(address _delegator, address _delegatee, uint256 _amount) public {
+    function testFuzz_FundFailsWhenBalanceTooLow(address _delegator, address _delegatee, uint256 _amount, uint256 _delta) public {
         vm.assume(_validActorAddress(_delegator));
         vm.assume(_delegatee != address(0));
-        _amount = bound(_amount, 10, 100_000_000e18);
+        vm.assume((_amount >= _delta) && (_amount <= 100_000_000e18));
+        _delta = bound(_delta, 1, 100_000_000e18);
+        _amount = bound(_amount, _delta, 100_000_000e18);
 
-        votingToken.mint(_delegator, _amount - 10);
+        votingToken.mint(_delegator, _amount - _delta);
 
         vm.startPrank(_delegator);
         votingToken.approve(address(franchiserFactory), _amount);
