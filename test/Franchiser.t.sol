@@ -249,7 +249,6 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         vm.assume(_validActorAddress(_delegator));
         vm.assume(_delegatee != address(0));
         vm.assume(_subDelegatee != address(0));
-        vm.assume((_amount >= _delta) && (_amount <= 100_000_000e18));
         _delta = bound(_delta, 1, 100_000_000e18);
         _amount = bound(_amount, _delta, 100_000_000e18);
         franchiser.initialize(_delegator, _delegatee, 1);
