@@ -212,7 +212,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Invariant Handler functions for Franchiser contract
-    function handler_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex) external countCall("handler_subDelegate") {
+    function handler_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex, uint256 _subDelegateAmountFraction) external countCall("handler_subDelegate") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
@@ -226,8 +226,10 @@ contract FranchiserFactoryHandler is Test {
         address _delegatee = _selectedFranchiser.delegatee();
         vm.assume(_validActorAddress(_subDelegatee));
         vm.assume(_delegatee != _subDelegatee);
+        _subDelegateAmountFraction = bound(_subDelegateAmountFraction, 1, _amount);
+        uint256 _subDelegateAmount = _amount / _subDelegateAmountFraction;
         vm.prank(_delegatee);
-        _selectedFranchiser.subDelegate(_subDelegatee, _amount);
+        _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
     }
 
     function callSummary() external view {
