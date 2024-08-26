@@ -21,7 +21,7 @@ contract FranchiserFactoryHandler is Test {
 
     mapping(bytes32 => CallCounts) public calls;
 
-    // Handler ghost AddressSet to contain all the funded franchisers created by handler_fund
+    // Handler ghost AddressSet to contain all the funded franchisers created by FranchiserFactory handler_fund
     EnumerableSet.AddressSet private fundedFranchisers;
 
     // Handler ghost array to contain all the funded franchisers created by the last call to handler_fundMany
@@ -41,9 +41,9 @@ contract FranchiserFactoryHandler is Test {
         _;
     }
 
-    function sumFundedFranchisersBalances() public view returns (uint256 sum) {
+    function sumFundedFranchisersBalances() public returns (uint256 sum) {
         for (uint256 i = 0; i < fundedFranchisers.length(); i++) {
-            sum += factory.votingToken().balanceOf(fundedFranchisers.at(i));
+            sum += _getTotalAmountDelegatedByFranchiser(Franchiser(fundedFranchisers.at(i)));
         }
     }
 
@@ -59,6 +59,33 @@ contract FranchiserFactoryHandler is Test {
         return bound(_amount, 0, 100_000_000e18);
     }
 
+    // Recursive function to get the sum tokens held in the sub-delegation tree of a given franchiser
+    function _getTotalAmountDelegatedByFranchiser(Franchiser _franchiser) internal returns (uint256 totalAmount) {
+        totalAmount = factory.votingToken().balanceOf(address(_franchiser));
+        for (uint256 i = 0; i < _franchiser.subDelegatees().length; i++) {
+            vm.startPrank(address(_franchiser));
+            Franchiser _subDelegatedFranchiser = _franchiser.getFranchiser(_franchiser.subDelegatees()[i]);
+            vm.stopPrank();
+            totalAmount +=  _getTotalAmountDelegatedByFranchiser(_subDelegatedFranchiser);
+        }
+    }
+
+    // Recursive function to get the selected subDelegatee of a given funded franchiser if possible
+    function _getSelectedSubDelegateeIfPossible(Franchiser _fundedFranchiser, uint256 _subDelegateIndex) internal returns (Franchiser _selectedFranchiser) {
+        _selectedFranchiser = _fundedFranchiser;
+        address[] memory _subDelegatees = _selectedFranchiser.subDelegatees();
+        if (_subDelegatees.length > 0) {
+            if (_subDelegateIndex >= _subDelegatees.length) {
+                _subDelegateIndex = bound(_subDelegateIndex, 0, _subDelegatees.length - 1);
+            }
+            vm.startPrank(address(_selectedFranchiser));
+            _selectedFranchiser = _selectedFranchiser.getFranchiser(_selectedFranchiser.subDelegatees()[_subDelegateIndex]);
+            vm.stopPrank();
+            _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateIndex);
+        }
+    }
+
+    // Invariant Handler functions for FranchiserFactory contract
     function handler_fund(address _delegator, address _delegatee, uint256 _amount) external countCall("handler_fund") {
         vm.assume(_validActorAddress(_delegator));
         _amount = _boundAmount(_amount);
@@ -99,15 +126,16 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
-    function handler_recall(uint256 _fundedFranchiserIndex) external countCall("handler_recall") {
+    function handler_recall(uint256 _fundedFranchiserIndex, uint256 _subDelegateeIndex) external countCall("handler_recall") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
-        Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        address _delegatee = _fundedFranchiser.delegatee();
-        address _delegator = _fundedFranchiser.delegator();
-        uint256 _amount = votingToken.balanceOf(address(_fundedFranchiser));
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateeIndex);
+        address _delegatee = _selectedFranchiser.delegatee();
+        address _delegator = _selectedFranchiser.delegator();
+        uint256 _amount = _getTotalAmountDelegatedByFranchiser(_selectedFranchiser);
 
         // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
         vm.startPrank(_delegator);
@@ -116,7 +144,7 @@ contract FranchiserFactoryHandler is Test {
         vm.stopPrank();
 
         // remove the franchiser from the fundedFranchisers array
-        fundedFranchisers.remove(address(_fundedFranchiser));
+        fundedFranchisers.remove(address(_selectedFranchiser));
     }
 
     function handler_recallMany(uint256 _numberFranchisersToRecall) external countCall("handler_recallMany") {
@@ -128,16 +156,11 @@ contract FranchiserFactoryHandler is Test {
 
         address[] memory _delegateesForRecallMany = new address[](_numberFranchisersToRecall);
         address[] memory _targetsForRecallMany = new address[](_numberFranchisersToRecall);
-        uint256[] memory _amountsForRecallMany = new uint256[](_numberFranchisersToRecall);
-        uint256 _totalAmountToRecall = 0;
 
         for (uint256 i = 0; i < _numberFranchisersToRecall; i++) {
             Franchiser _fundedFranchiser = Franchiser(lastFundedFranchisersArray[i]);
             _delegateesForRecallMany[i] = _fundedFranchiser.delegatee();
             _targetsForRecallMany[i] = targetAddressForRecalledFunds;
-            uint256 _amount = votingToken.balanceOf(address(_fundedFranchiser));
-            _amountsForRecallMany[i] = _amount;
-            _totalAmountToRecall += _amount;
             fundedFranchisers.remove(address(lastFundedFranchisersArray[i]));
         }
         vm.prank(lastFundedFranchisersArray[0].delegator());
@@ -188,6 +211,25 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
+    // Invariant Handler functions for Franchiser contract
+    function handler_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex) external countCall("handler_subDelegate") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
+        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateIndex);
+        uint256 _amount = votingToken.balanceOf(address(_selectedFranchiser));
+        if (_amount == 0) {
+            return;
+        }
+        address _delegatee = _selectedFranchiser.delegatee();
+        vm.assume(_validActorAddress(_subDelegatee));
+        vm.assume(_delegatee != _subDelegatee);
+        vm.prank(_delegatee);
+        _selectedFranchiser.subDelegate(_subDelegatee, _amount);
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -197,6 +239,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("handler_recallMany", calls["handler_recallMany"].calls);
         console2.log("handler_permitAndFund", calls["handler_permitAndFund"].calls);
         console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"].calls);
+        console2.log("handler_subDelegate", calls["handler_subDelegate"].calls);
         console2.log("-------------------\n");
     }
 }
