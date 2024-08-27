@@ -80,7 +80,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Recursive function to get the selected subDelegatee of a given funded franchiser if possible
-    function _getSelectedSubDelegateeIfPossible(Franchiser _fundedFranchiser, uint256 _subDelegateIndex) internal returns (Franchiser _selectedFranchiser) {
+    function _getDeepestSubDelegateeInTree(Franchiser _fundedFranchiser, uint256 _subDelegateIndex) internal returns (Franchiser _selectedFranchiser) {
         _selectedFranchiser = _fundedFranchiser;
         address[] memory _subDelegatees = _selectedFranchiser.subDelegatees();
         if (_subDelegatees.length > 0) {
@@ -90,7 +90,7 @@ contract FranchiserFactoryHandler is Test {
             vm.startPrank(address(_selectedFranchiser));
             _selectedFranchiser = _selectedFranchiser.getFranchiser(_selectedFranchiser.subDelegatees()[_subDelegateIndex]);
             vm.stopPrank();
-            _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateIndex);
+            _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
         }
     }
 
@@ -141,7 +141,7 @@ contract FranchiserFactoryHandler is Test {
         }
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateeIndex);
+        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateeIndex);
         address _delegatee = _selectedFranchiser.delegatee();
         address _delegator = _selectedFranchiser.delegator();
         uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
@@ -227,7 +227,7 @@ contract FranchiserFactoryHandler is Test {
         }
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateIndex);
+        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
         uint256 _amount = votingToken.balanceOf(address(_selectedFranchiser));
         if (_amount == 0) {
             return;
