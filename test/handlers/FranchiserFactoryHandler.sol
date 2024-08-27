@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+import {EnumerableSet} from "test/helpers/EnumerableSet.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {VotingTokenConcrete} from "test/VotingTokenConcrete.sol";
 import {FranchiserFactory} from "src/FranchiserFactory.sol";
@@ -41,12 +41,6 @@ contract FranchiserFactoryHandler is Test {
         _;
     }
 
-    function sumFundedFranchisersBalances() public returns (uint256 sum) {
-        for (uint256 i = 0; i < fundedFranchisers.length(); i++) {
-            sum += _getTotalAmountDelegatedByFranchiser(Franchiser(fundedFranchisers.at(i)));
-        }
-    }
-
     function _validActorAddress(address _address) internal view returns (bool valid) {
         valid = (_address != address(0))
             && (
@@ -60,14 +54,29 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Recursive function to get the sum tokens held in the sub-delegation tree of a given franchiser
-    function _getTotalAmountDelegatedByFranchiser(Franchiser _franchiser) internal returns (uint256 totalAmount) {
+    function _getTotalAmountDelegatedByFranchiser(address _franchiserAddress) internal returns (uint256 totalAmount) {
+        Franchiser _franchiser = Franchiser(_franchiserAddress);
         totalAmount = factory.votingToken().balanceOf(address(_franchiser));
         for (uint256 i = 0; i < _franchiser.subDelegatees().length; i++) {
             vm.startPrank(address(_franchiser));
-            Franchiser _subDelegatedFranchiser = _franchiser.getFranchiser(_franchiser.subDelegatees()[i]);
+            address _subDelegatedFranchiser = address(_franchiser.getFranchiser(_franchiser.subDelegatees()[i]));
             vm.stopPrank();
             totalAmount +=  _getTotalAmountDelegatedByFranchiser(_subDelegatedFranchiser);
         }
+    }
+
+    // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount delegated by all funded franchisers
+    function _reduceFranchiserBalances(
+        uint256 acc,
+        function(address) returns (uint256) func)
+        internal returns (uint256)
+    {
+        return fundedFranchisers.reduce(acc, func);
+    }
+
+    // public function (callable by invariant tests) to get the sum of the total amount delegated by all funded franchisers
+    function sumFundedFranchisersBalances() public returns (uint256 sum) {
+        sum = _reduceFranchiserBalances(0, _getTotalAmountDelegatedByFranchiser);
     }
 
     // Recursive function to get the selected subDelegatee of a given funded franchiser if possible
@@ -135,7 +144,7 @@ contract FranchiserFactoryHandler is Test {
         _selectedFranchiser = _getSelectedSubDelegateeIfPossible(_selectedFranchiser, _subDelegateeIndex);
         address _delegatee = _selectedFranchiser.delegatee();
         address _delegator = _selectedFranchiser.delegator();
-        uint256 _amount = _getTotalAmountDelegatedByFranchiser(_selectedFranchiser);
+        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
         // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
         vm.startPrank(_delegator);
