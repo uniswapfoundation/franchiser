@@ -17,6 +17,14 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
     Franchiser private franchiserImplementation;
     Franchiser private franchiser;
 
+    function _validActorAddress(address _address) internal view returns (bool valid) {
+        valid = (_address != address(0)) && (_address != address(votingToken));
+    }
+
+    function _boundAmount(uint256 _amount) internal pure returns (uint256) {
+        return bound(_amount, 0, 100_000_000e18);
+    }
+
     function setUp() public {
         votingToken = new VotingTokenConcrete();
         franchiserImplementation = new Franchiser(
@@ -203,6 +211,54 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(votingToken.balanceOf(address(returnedFranchiser)), 50);
     }
 
+    function testFuzz_SubDelegateBalancesUpdated(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        vm.assume(_delegatee != _subDelegatee);
+        _amount = _boundAmount(_amount);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount);
+
+        Franchiser _expectedSubFranchiser = franchiser.getFranchiser(_subDelegatee);
+        uint256 _subFranchiserBalanceBefore = votingToken.balanceOf(address(_expectedSubFranchiser));
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(franchiser));
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+        uint256 _subDelegateeVotingPowerBefore = votingToken.getVotes(_subDelegatee);
+        vm.prank(_delegatee);
+        Franchiser subFranchiser = franchiser.subDelegate(_subDelegatee, _amount);
+
+        assertEq(votingToken.balanceOf(address(subFranchiser)), _subFranchiserBalanceBefore + _amount);
+        assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore - _amount);
+        assertEq(votingToken.getVotes(_delegatee), _delegateeVotingPowerBefore - _amount);
+        assertEq(votingToken.getVotes(_subDelegatee), _subDelegateeVotingPowerBefore + _amount);
+    }
+
+    function testFuzz_RevertIf_SubDelegateCalledWithFranchiserBalanceTooLow(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount,
+        uint256 _delta
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        _delta = bound(_delta, 1, 100_000_000e18);
+        _amount = bound(_amount, _delta, 100_000_000e18);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount - _delta);
+
+        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.prank(_delegatee);
+        franchiser.subDelegate(_subDelegatee, _amount);
+    }
+
     function testSubDelegateManyRevertsArrayLengthMismatch() public {
         franchiser.initialize(Utils.alice, Utils.bob, 2);
 
@@ -284,6 +340,30 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
 
         assertEq(franchiser.subDelegatees(), new address[](0));
         assertEq(votingToken.balanceOf(address(franchiser)), 100);
+    }
+
+    function testFuzz_UnSubDelegateBalanceUpdated(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        vm.assume(_subDelegatee != address(0));
+        _amount = _boundAmount(_amount);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        votingToken.mint(address(franchiser), _amount);
+
+        vm.startPrank(_delegatee);
+        Franchiser subFranchiser = franchiser.subDelegate(_subDelegatee, _amount);
+        uint256 _subFranchiserBalanceBefore = votingToken.balanceOf(address(subFranchiser));
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(franchiser));
+        franchiser.unSubDelegate(_subDelegatee);
+        vm.stopPrank();
+
+        assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore + _amount);
+        assertEq(votingToken.balanceOf(address(subFranchiser)), _subFranchiserBalanceBefore - _amount);
     }
 
     function testUnSubDelegateMany() public {
@@ -382,5 +462,34 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         vm.prank(Utils.alice);
         franchiser.recall(Utils.alice);
         assertEq(votingToken.balanceOf(address(Utils.alice)), 100);
+    }
+
+    function testFuzz_RecallNestedSubDelegateesBalancesUpdated(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee1,
+        address _subDelegatee2,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_validActorAddress(_delegatee));
+        vm.assume(_validActorAddress(_subDelegatee1));
+        vm.assume(_subDelegatee2 != address(0));
+        _amount = bound(_amount, 4, 100_000_000e18);
+
+        votingToken.mint(address(franchiser), _amount);
+
+        vm.prank(_delegator);
+        franchiser.initialize(_delegator, _delegatee, 2);
+
+        // sub-delegate one-fourth of the amount to each sub-delegatee
+        vm.prank(_delegatee);
+        Franchiser _subFranchiser1 = franchiser.subDelegate(_subDelegatee1, _amount / 4);
+        vm.prank(_subDelegatee1);
+        _subFranchiser1.subDelegate(_subDelegatee2, _amount / 4);
+
+        vm.prank(_delegator);
+        franchiser.recall(_delegator);
+        assertEq(votingToken.balanceOf(_delegator), _amount);
     }
 }
