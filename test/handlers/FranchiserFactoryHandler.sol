@@ -241,6 +241,42 @@ contract FranchiserFactoryHandler is Test {
         _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
     }
 
+    function handler_subDelegateMany(
+        address[] memory _subDelegatees,
+        uint256 _fundedFranchiserIndex,
+        uint256 _subDelegateIndex
+    ) external countCall("handler_subDelegateMany") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
+        uint256 _numberOfDelegatees = _subDelegatees.length;
+        if (_numberOfDelegatees == 0) {
+            return;
+        }
+        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
+        _numberOfDelegatees = bound(_numberOfDelegatees, 1, _selectedFranchiser.maximumSubDelegatees() - 1);
+        uint256 _amountInFranchiser = votingToken.balanceOf(address(_selectedFranchiser));
+        if (_amountInFranchiser == 0) {
+            return;
+        }
+
+        address _delegatee = _selectedFranchiser.delegatee();
+        uint256 _subDelegateAmount = _amountInFranchiser / (_numberOfDelegatees + 1);
+        if (_subDelegateAmount == 0) {
+            return;
+        }
+        uint256[] memory _amountsForSubDelegateMany = new uint256[](_numberOfDelegatees);
+        address[] memory _subDelegateesForSubDelegateMany = new address[](_numberOfDelegatees);
+        for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            _subDelegateesForSubDelegateMany[i] = _subDelegatees[i];
+            _amountsForSubDelegateMany[i] = _subDelegateAmount;
+        }
+        vm.prank(_delegatee);
+        _selectedFranchiser.subDelegateMany(_subDelegateesForSubDelegateMany, _amountsForSubDelegateMany);
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -251,6 +287,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("handler_permitAndFund", calls["handler_permitAndFund"].calls);
         console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"].calls);
         console2.log("handler_subDelegate", calls["handler_subDelegate"].calls);
+        console2.log("handler_subDelegateMany", calls["handler_subDelegateMany"].calls);
         console2.log("-------------------\n");
     }
 }
