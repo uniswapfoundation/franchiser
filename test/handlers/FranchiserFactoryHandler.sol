@@ -24,6 +24,12 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost AddressSet to contain all the funded franchisers created by FranchiserFactory handler_fund
     EnumerableSet.AddressSet private fundedFranchisers;
 
+    // Handler ghost AddressSet to contain all of the delegators that used handler_factoryFund or handler_factoryFundMany
+    EnumerableSet.AddressSet private delegators;
+
+    // Handler ghost AddressSet to contain all of the delegatees that were delegated to by handler functions
+    EnumerableSet.AddressSet private delegatees;
+
     // Handler ghost array to contain all the funded franchisers created by the last call to handler_fundMany
     Franchiser[] private lastFundedFranchisersArray;
 
@@ -103,7 +109,13 @@ contract FranchiserFactoryHandler is Test {
         votingToken.approve(address(factory), _amount);
         franchiser = factory.fund(_delegatee, _amount);
         vm.stopPrank();
+
+        // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         fundedFranchisers.add(address(franchiser));
+
+        // add the delegator and delegatee to the delegators and delegatees AddressSets for tracking totals invariants
+        delegators.add(_delegator);
+        delegatees.add(_delegatee);
     }
 
     function handler_fundMany(address _delegator, address[] memory _delegatees, uint256 _baseAmount)
@@ -129,9 +141,13 @@ contract FranchiserFactoryHandler is Test {
         lastFundedFranchisersArray = factory.fundMany(_delegatees, _amountsForFundMany);
         vm.stopPrank();
 
-        // add the created franchisers to the fundedFranchisers AddressSet for tracking totals invariants
+        // add the delegator to the delegators AddressSets for tracking totals invariants
+        delegators.add(_delegator);
+
+        // add the created franchisers and the delegatees to their appropriate AddressSets for tracking totals invariants
         for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
             fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
+            delegatees.add(_delegatees[j]);
         }
     }
 
@@ -151,9 +167,6 @@ contract FranchiserFactoryHandler is Test {
         factory.recall(_delegatee, _delegator);
         votingToken.transfer(targetAddressForRecalledFunds, _amount);
         vm.stopPrank();
-
-        // remove the franchiser from the fundedFranchisers array
-        fundedFranchisers.remove(address(_selectedFranchiser));
     }
 
     function handler_recallMany(uint256 _numberFranchisersToRecall) external countCall("handler_recallMany") {
@@ -170,7 +183,6 @@ contract FranchiserFactoryHandler is Test {
             Franchiser _fundedFranchiser = Franchiser(lastFundedFranchisersArray[i]);
             _delegateesForRecallMany[i] = _fundedFranchiser.delegatee();
             _targetsForRecallMany[i] = targetAddressForRecalledFunds;
-            fundedFranchisers.remove(address(lastFundedFranchisersArray[i]));
         }
         vm.prank(lastFundedFranchisersArray[0].delegator());
         factory.recallMany(_delegateesForRecallMany, _targetsForRecallMany);
@@ -188,7 +200,13 @@ contract FranchiserFactoryHandler is Test {
         votingToken.mint(_delegator, _amount);
         vm.prank(_delegator);
         franchiser = factory.permitAndFund(_delegatee, _amount, _deadline, _v, _r, _s);
+
+        // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         fundedFranchisers.add(address(franchiser));
+
+        // add the delegator and delegatee to the delegators and delegatees AddressSets for tracking totals invariants
+        delegators.add(_delegator);
+        delegatees.add(_delegatee);
     }
 
     function handler_permitAndFundMany(uint256 _delegatorPrivateKey, address[] memory _delegatees, uint256 _amount)
@@ -214,9 +232,13 @@ contract FranchiserFactoryHandler is Test {
         lastFundedFranchisersArray = factory.permitAndFundMany(_delegatees, _amountsForFundMany, _deadline, _v, _r, _s);
         vm.stopPrank();
 
-        // add the created franchisers to the fundedFranchisers AddressSet for tracking total invariants
+        // add the delegator to the delegators AddressSet for tracking totals invariants
+        delegators.add(_delegator);
+
+        // add the created franchisers and delegatees to the appropriate AddressSets for tracking total invariants
         for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
             fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
+            delegatees.add(_delegatees[j]);
         }
     }
 
