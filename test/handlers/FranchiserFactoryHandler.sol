@@ -21,10 +21,10 @@ contract FranchiserFactoryHandler is Test {
 
     mapping(bytes32 => CallCounts) public calls;
 
-    // Handler ghost AddressSet to contain all the funded franchisers created by FranchiserFactory handler_fund
+    // Handler ghost AddressSet to contain all the funded franchisers created by the FranchiserFactory
     EnumerableSet.AddressSet private fundedFranchisers;
 
-    // Handler ghost AddressSet to contain all of the delegators that used handler_factoryFund or handler_factoryFundMany
+    // Handler ghost AddressSet to contain all of the delegators that were used to fund franchisers
     EnumerableSet.AddressSet private delegators;
 
     // Handler ghost AddressSet to contain all of the delegatees that were delegated to by handler functions
@@ -33,7 +33,7 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost AddressSet to contain all of the subDelegated Franchisers 
     EnumerableSet.AddressSet private subDelegatedFranchisers;
 
-    // Handler ghost array to contain all the funded franchisers created by the last call to handler_fundMany
+    // Handler ghost array to contain all the funded franchisers created by the last call to factory_fundMany
     Franchiser[] private lastFundedFranchisersArray;
 
     // Ghost variable address to receive of the total amount of funds recalled from franchisers
@@ -104,7 +104,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Invariant Handler functions for FranchiserFactory contract
-    function handler_fund(address _delegator, address _delegatee, uint256 _amount) external countCall("handler_fund") {
+    function factory_fund(address _delegator, address _delegatee, uint256 _amount) external countCall("factory_fund") {
         vm.assume(_validActorAddress(_delegator));
         _amount = _boundAmount(_amount);
         votingToken.mint(_delegator, _amount);
@@ -121,9 +121,9 @@ contract FranchiserFactoryHandler is Test {
         delegatees.add(_delegatee);
     }
 
-    function handler_fundMany(address _delegator, address[] memory _delegatees, uint256 _baseAmount)
+    function factory_fundMany(address _delegator, address[] memory _delegatees, uint256 _baseAmount)
         external
-        countCall("handler_fundMany")
+        countCall("factory_fundMany")
     {
         uint256 _numberOfDelegatees = _delegatees.length;
         _baseAmount = _boundAmount(_baseAmount);
@@ -154,7 +154,7 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
-    function handler_recall(uint256 _fundedFranchiserIndex, uint256 _subDelegateeIndex) external countCall("handler_recall") {
+    function factory_recall(uint256 _fundedFranchiserIndex, uint256 _subDelegateeIndex) external countCall("factory_recall") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
@@ -172,7 +172,7 @@ contract FranchiserFactoryHandler is Test {
         vm.stopPrank();
     }
 
-    function handler_recallMany(uint256 _numberFranchisersToRecall) external countCall("handler_recallMany") {
+    function factory_recallMany(uint256 _numberFranchisersToRecall) external countCall("factory_recallMany") {
         if (lastFundedFranchisersArray.length < 3) {
             delete lastFundedFranchisersArray;
             return;
@@ -190,13 +190,13 @@ contract FranchiserFactoryHandler is Test {
         vm.prank(lastFundedFranchisersArray[0].delegator());
         factory.recallMany(_delegateesForRecallMany, _targetsForRecallMany);
 
-        // empty the lastFundedFranchisersArray, so handler_recallMany can only be called again after a new handler_fundMany
+        // empty the lastFundedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
         delete lastFundedFranchisersArray;
     }
 
-    function handler_permitAndFund(uint256 _delegatorPrivateKey, address _delegatee, uint256 _amount)
+    function factory_permitAndFund(uint256 _delegatorPrivateKey, address _delegatee, uint256 _amount)
         external
-        countCall("handler_permitAndFund")
+        countCall("factory_permitAndFund")
     {
         (address _delegator, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) =
             votingToken.getPermitSignature(vm, _delegatorPrivateKey, address(factory), _amount);
@@ -212,9 +212,9 @@ contract FranchiserFactoryHandler is Test {
         delegatees.add(_delegatee);
     }
 
-    function handler_permitAndFundMany(uint256 _delegatorPrivateKey, address[] memory _delegatees, uint256 _amount)
+    function factory_permitAndFundMany(uint256 _delegatorPrivateKey, address[] memory _delegatees, uint256 _amount)
         external
-        countCall("handler_permitAndFundMany")
+        countCall("factory_permitAndFundMany")
     {
         uint256 _numberOfDelegatees = _delegatees.length;
         _amount = _bound(_amount, 1, 10_000e18);
@@ -246,7 +246,7 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Invariant Handler functions for Franchiser contract
-    function handler_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex, uint256 _subDelegateAmountFraction) external countCall("handler_subDelegate") {
+    function franchiser_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex, uint256 _subDelegateAmountFraction) external countCall("franchiser_subDelegate") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
@@ -270,11 +270,11 @@ contract FranchiserFactoryHandler is Test {
         subDelegatedFranchisers.add(address(_subDelegatedFranchiser));
     }
 
-    function handler_subDelegateMany(
+    function franchiser_subDelegateMany(
         address[] memory _subDelegatees,
         uint256 _fundedFranchiserIndex,
         uint256 _subDelegateIndex
-    ) external countCall("handler_subDelegateMany") {
+    ) external countCall("franchiser_subDelegateMany") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
@@ -315,14 +315,14 @@ contract FranchiserFactoryHandler is Test {
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
-        console2.log("handler_fund", calls["handler_fund"].calls);
-        console2.log("handler_fundMany", calls["handler_fundMany"].calls);
-        console2.log("handler_recall", calls["handler_recall"].calls);
-        console2.log("handler_recallMany", calls["handler_recallMany"].calls);
-        console2.log("handler_permitAndFund", calls["handler_permitAndFund"].calls);
-        console2.log("handler_permitAndFundMany", calls["handler_permitAndFundMany"].calls);
-        console2.log("handler_subDelegate", calls["handler_subDelegate"].calls);
-        console2.log("handler_subDelegateMany", calls["handler_subDelegateMany"].calls);
+        console2.log("factory_fund", calls["factory_fund"].calls);
+        console2.log("factory_fundMany", calls["factory_fundMany"].calls);
+        console2.log("factory_recall", calls["factory_recall"].calls);
+        console2.log("factory_recallMany", calls["factory_recallMany"].calls);
+        console2.log("factory_permitAndFund", calls["factory_permitAndFund"].calls);
+        console2.log("factory_permitAndFundMany", calls["factory_permitAndFundMany"].calls);
+        console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
+        console2.log("franchiser_subDelegateMany", calls["franchiser_subDelegateMany"].calls);
         console2.log("-------------------\n");
     }
 }
