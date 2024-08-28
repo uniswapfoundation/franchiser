@@ -30,6 +30,9 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost AddressSet to contain all of the delegatees that were delegated to by handler functions
     EnumerableSet.AddressSet private delegatees;
 
+    // Handler ghost AddressSet to contain all of the subDelegated Franchisers 
+    EnumerableSet.AddressSet private subDelegatedFranchisers;
+
     // Handler ghost array to contain all the funded franchisers created by the last call to handler_fundMany
     Franchiser[] private lastFundedFranchisersArray;
 
@@ -260,7 +263,11 @@ contract FranchiserFactoryHandler is Test {
         _subDelegateAmountFraction = bound(_subDelegateAmountFraction, 1, _amount);
         uint256 _subDelegateAmount = _amount / _subDelegateAmountFraction;
         vm.prank(_delegatee);
-        _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
+        Franchiser _subDelegatedFranchiser = _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
+
+        // add the subDelegated franchiser to the subDelegatedFranchisers AddressSet so it can be foound
+        // for later removal by unsubDelegate, and for use in future subDelegations, prefering subdelegatees for tree creation
+        subDelegatedFranchisers.add(address(_subDelegatedFranchiser));
     }
 
     function handler_subDelegateMany(
@@ -296,7 +303,13 @@ contract FranchiserFactoryHandler is Test {
             _amountsForSubDelegateMany[i] = _subDelegateAmount;
         }
         vm.prank(_delegatee);
-        _selectedFranchiser.subDelegateMany(_subDelegateesForSubDelegateMany, _amountsForSubDelegateMany);
+        Franchiser[] memory _subDelegatedFranchisers = _selectedFranchiser.subDelegateMany(_subDelegateesForSubDelegateMany, _amountsForSubDelegateMany);
+
+        // add the subDelegated franchisers to the subDelegatedFranchisers AddressSet so they can be found
+        // for later removal by unsubDelegate, and for use in future subDelegations, prefering subdelegatees for tree creation
+        for (uint256 j = 0; j < _subDelegatedFranchisers.length; j++) {
+            subDelegatedFranchisers.add(address(_subDelegatedFranchisers[j]));
+        }
     }
 
     function callSummary() external view {
