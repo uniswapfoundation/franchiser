@@ -16,7 +16,7 @@ contract FranchiseFactoryInvariantTest is Test {
         token = new VotingTokenConcrete();
         factory = new FranchiserFactory(IVotingToken(address(token)));
         handler = new FranchiserFactoryHandler(factory);
-        bytes4[] memory selectors = new bytes4[](8);
+        bytes4[] memory selectors = new bytes4[](9);
         selectors[0] = FranchiserFactoryHandler.factory_fundMany.selector;
         selectors[1] = FranchiserFactoryHandler.factory_recallMany.selector;
         selectors[2] = FranchiserFactoryHandler.factory_recall.selector;
@@ -25,6 +25,7 @@ contract FranchiseFactoryInvariantTest is Test {
         selectors[5] = FranchiserFactoryHandler.factory_permitAndFundMany.selector;
         selectors[6] = FranchiserFactoryHandler.franchiser_subDelegate.selector;
         selectors[7] = FranchiserFactoryHandler.franchiser_subDelegateMany.selector;
+        selectors[8] = FranchiserFactoryHandler.franchiser_recall.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }

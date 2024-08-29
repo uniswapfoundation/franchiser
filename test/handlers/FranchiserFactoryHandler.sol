@@ -30,7 +30,7 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost AddressSet to contain all of the delegatees that were delegated to by handler functions
     EnumerableSet.AddressSet private delegatees;
 
-    // Handler ghost AddressSet to contain all of the subDelegated Franchisers 
+    // Handler ghost AddressSet to contain all of the Franchisers created by sub-delegation
     EnumerableSet.AddressSet private subDelegatedFranchisers;
 
     // Handler ghost array to contain all the funded franchisers created by the last call to factory_fundMany
@@ -312,6 +312,32 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
+    // This function will do recalls only from Franchisers that have sub-delegatees
+    function franchiser_recall() external countCall("franchiser_recall") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
+        // find a funded franchiser that has sub-delegatees
+        uint256 _subDelegateCount = 0;
+        uint256 _fundedFranchiserIndex = 0;
+        while ( (_fundedFranchiserIndex < fundedFranchisers.length()) && (_subDelegateCount == 0)) {
+            _subDelegateCount = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex)).subDelegatees().length;
+            if (_subDelegateCount == 0) _fundedFranchiserIndex++;
+        }
+        if (_subDelegateCount == 0) {
+            return;
+        }
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        address _delegatee = _selectedFranchiser.delegatee();
+        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
+
+        // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
+        vm.prank(_selectedFranchiser.owner());
+        _selectedFranchiser.recall(_delegatee);
+        vm.prank(address(_delegatee));
+        votingToken.transfer(targetAddressForRecalledFunds, _amount);
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -323,6 +349,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("factory_permitAndFundMany", calls["factory_permitAndFundMany"].calls);
         console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
         console2.log("franchiser_subDelegateMany", calls["franchiser_subDelegateMany"].calls);
+        console2.log("franchiser_recall", calls["franchiser_recall"].calls);
         console2.log("-------------------\n");
     }
 }
