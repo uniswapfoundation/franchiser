@@ -38,7 +38,7 @@ contract FranchiseFactoryInvariantTest is Test {
         handler.callSummary();
         assertEq(
             token.totalSupply(),
-            token.balanceOf(handler.targetAddressForRecalledFunds()) + handler.sumFundedFranchisersBalances()
+            handler.sumDelegatorsBalances() + handler.sumFundedFranchisersBalances()
         );
     }
 

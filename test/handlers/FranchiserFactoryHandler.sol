@@ -36,9 +36,6 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost array to contain all the funded franchisers created by the last call to factory_fundMany
     Franchiser[] private lastFundedFranchisersArray;
 
-    // Ghost variable address to receive of the total amount of funds recalled from franchisers
-    address public targetAddressForRecalledFunds = makeAddr("targetAddressForRecalledFunds");
-
     constructor(FranchiserFactory _factory) {
         factory = _factory;
         votingToken = VotingTokenConcrete(address(factory.votingToken()));
@@ -74,6 +71,11 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
+    // function to get a balance for the reduce functions
+    function _getAccountBalance(address _account) internal view returns (uint256 balance) {
+        balance = votingToken.balanceOf(_account);
+    }
+
     // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount delegated by all funded franchisers
     function _reduceFranchiserBalances(
         uint256 acc,
@@ -83,9 +85,23 @@ contract FranchiserFactoryHandler is Test {
         return fundedFranchisers.reduce(acc, func);
     }
 
+    // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount recalled to delegators by funded franchisers
+    function _reduceDelegatorBalances(
+        uint256 acc,
+        function(address) returns (uint256) func)
+        internal returns (uint256)
+    {
+        return delegators.reduce(acc, func);
+    }
+
     // public function (callable by invariant tests) to get the sum of the total amount delegated by all funded franchisers
     function sumFundedFranchisersBalances() public returns (uint256 sum) {
         sum = _reduceFranchiserBalances(0, _getTotalAmountDelegatedByFranchiser);
+    }
+
+    // function to get the sum of all delegatees balances
+    function sumDelegatorsBalances() public returns (uint256 sum) {
+        sum = _reduceDelegatorBalances(0, _getAccountBalance);
     }
 
     // Recursive function to get the selected subDelegatee of a given funded franchiser if possible
@@ -163,13 +179,10 @@ contract FranchiserFactoryHandler is Test {
         _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateeIndex);
         address _delegatee = _selectedFranchiser.delegatee();
         address _delegator = _selectedFranchiser.delegator();
-        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
-        // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
-        vm.startPrank(_delegator);
+        // recall of delegated funds to the delegator
+        vm.prank(_delegator);
         factory.recall(_delegatee, _delegator);
-        votingToken.transfer(targetAddressForRecalledFunds, _amount);
-        vm.stopPrank();
     }
 
     function factory_recallMany(uint256 _numberFranchisersToRecall) external countCall("factory_recallMany") {
@@ -185,7 +198,7 @@ contract FranchiserFactoryHandler is Test {
         for (uint256 i = 0; i < _numberFranchisersToRecall; i++) {
             Franchiser _fundedFranchiser = Franchiser(lastFundedFranchisersArray[i]);
             _delegateesForRecallMany[i] = _fundedFranchiser.delegatee();
-            _targetsForRecallMany[i] = targetAddressForRecalledFunds;
+            _targetsForRecallMany[i] = _fundedFranchiser.delegator();
         }
         vm.prank(lastFundedFranchisersArray[0].delegator());
         factory.recallMany(_delegateesForRecallMany, _targetsForRecallMany);
@@ -328,14 +341,12 @@ contract FranchiserFactoryHandler is Test {
             return;
         }
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        address _delegatee = _selectedFranchiser.delegatee();
-        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
+        address _delegator = _selectedFranchiser.delegator();
+        // uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
-        // recall of delegated funds then move the recalled funds to the targetAddressForRecalledFunds
+        // recall the delegated funds
         vm.prank(_selectedFranchiser.owner());
-        _selectedFranchiser.recall(_delegatee);
-        vm.prank(address(_delegatee));
-        votingToken.transfer(targetAddressForRecalledFunds, _amount);
+        _selectedFranchiser.recall(_delegator);
     }
 
     function callSummary() external view {
