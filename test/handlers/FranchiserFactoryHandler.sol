@@ -36,6 +36,12 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost array to contain all the funded franchisers created by the last call to factory_fundMany
     Franchiser[] private lastFundedFranchisersArray;
 
+    // Handler ghost array to contain all the franchisers created by the last call to franchiser_subDelegateMany
+    Franchiser[] private lastSubDelegatedFranchisersArray;
+
+    // Franchiser that performed the last sub-delegation
+    Franchiser private lastSubDelegatingFranchiser;
+
     constructor(FranchiserFactory _factory) {
         factory = _factory;
         votingToken = VotingTokenConcrete(address(factory.votingToken()));
@@ -185,6 +191,7 @@ contract FranchiserFactoryHandler is Test {
         factory.recall(_delegatee, _delegator);
     }
 
+    // This function will do a factory recall call for a subset of the last funded franchisers created by the factory (fundMan or permitAndFundMany)
     function factory_recallMany(uint256 _numberFranchisersToRecall) external countCall("factory_recallMany") {
         if (lastFundedFranchisersArray.length < 3) {
             delete lastFundedFranchisersArray;
@@ -315,13 +322,17 @@ contract FranchiserFactoryHandler is Test {
             _subDelegateesForSubDelegateMany[i] = _subDelegatees[i];
             _amountsForSubDelegateMany[i] = _subDelegateAmount;
         }
+
+        // clear the storage of the lastSubDelegatedFranchisersArray and create a new one with call to subDelegateMany
+        delete lastSubDelegatedFranchisersArray;
         vm.prank(_delegatee);
-        Franchiser[] memory _subDelegatedFranchisers = _selectedFranchiser.subDelegateMany(_subDelegateesForSubDelegateMany, _amountsForSubDelegateMany);
+        lastSubDelegatedFranchisersArray = _selectedFranchiser.subDelegateMany(_subDelegateesForSubDelegateMany, _amountsForSubDelegateMany);
+        lastSubDelegatingFranchiser = _selectedFranchiser;
 
         // add the subDelegated franchisers to the subDelegatedFranchisers AddressSet so they can be found
         // for later removal by unsubDelegate, and for use in future subDelegations, prefering subdelegatees for tree creation
-        for (uint256 j = 0; j < _subDelegatedFranchisers.length; j++) {
-            subDelegatedFranchisers.add(address(_subDelegatedFranchisers[j]));
+        for (uint256 j = 0; j < lastSubDelegatedFranchisersArray.length; j++) {
+            subDelegatedFranchisers.add(address(lastSubDelegatedFranchisersArray[j]));
         }
     }
 
@@ -342,11 +353,55 @@ contract FranchiserFactoryHandler is Test {
         }
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegator = _selectedFranchiser.delegator();
-        // uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
         // recall the delegated funds
         vm.prank(_selectedFranchiser.owner());
         _selectedFranchiser.recall(_delegator);
+    }
+
+    // This function will do recalls only from Franchisers that have sub-delegatees
+    function franchiser_unSubDelegate() external countCall("franchiser_unSubDelegate") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
+        // find a funded franchiser that has sub-delegatees
+        uint256 _subDelegateCount = 0;
+        uint256 _fundedFranchiserIndex = 0;
+        while ( (_fundedFranchiserIndex < fundedFranchisers.length()) && (_subDelegateCount == 0)) {
+            _subDelegateCount = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex)).subDelegatees().length;
+            if (_subDelegateCount == 0) _fundedFranchiserIndex++;
+        }
+        if (_subDelegateCount == 0) {
+            return;
+        }
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        address _delegator = _selectedFranchiser.delegator();
+        address _delegatee = _selectedFranchiser.delegatee();
+
+        // recall the delegated funds
+        vm.prank(_delegatee);
+        _selectedFranchiser.unSubDelegate(_delegator);
+    }
+
+    // This function will do a franchiser unsubdelegate call for a subset of the last sub-delegated franchisers done by a franchiser
+    function franchiser_unSubDelegateMany(uint256 _numberFranchisersToUnSubDelegate) external countCall("franchiser_unSubDelegateMany") {
+        if (lastSubDelegatedFranchisersArray.length < 3) {
+            delete lastSubDelegatedFranchisersArray;
+            return;
+        }
+        _numberFranchisersToUnSubDelegate = bound(_numberFranchisersToUnSubDelegate, 1, lastSubDelegatedFranchisersArray.length - 1);
+
+        address[] memory _delegateesForUnSubDelegateMany = new address[](_numberFranchisersToUnSubDelegate);
+
+        for (uint256 i = 0; i < _numberFranchisersToUnSubDelegate; i++) {
+            Franchiser _franchiser = Franchiser(lastSubDelegatedFranchisersArray[i]);
+            _delegateesForUnSubDelegateMany[i] = _franchiser.delegatee();
+        }
+        vm.prank(lastSubDelegatingFranchiser.delegatee());
+        lastSubDelegatingFranchiser.unSubDelegateMany(_delegateesForUnSubDelegateMany);
+
+        // empty the lastFundedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
+        delete lastSubDelegatedFranchisersArray;
     }
 
     function callSummary() external view {
@@ -361,6 +416,8 @@ contract FranchiserFactoryHandler is Test {
         console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
         console2.log("franchiser_subDelegateMany", calls["franchiser_subDelegateMany"].calls);
         console2.log("franchiser_recall", calls["franchiser_recall"].calls);
+        console2.log("franchiser_unSubDelegate", calls["franchiser_unSubDelegate"].calls);
+        console2.log("franchiser_unSubDelegateMany", calls["franchiser_unSubDelegateMany"].calls);
         console2.log("-------------------\n");
     }
 }
