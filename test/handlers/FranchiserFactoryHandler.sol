@@ -111,18 +111,30 @@ contract FranchiserFactoryHandler is Test {
         sum = _reduceDelegatorBalances(0, _getAccountBalance);
     }
 
-    // Recursive function to get the selected subDelegatee of a given funded franchiser if possible
-    function _getDeepestSubDelegateeInTree(Franchiser _fundedFranchiser, uint256 _subDelegateIndex) internal returns (Franchiser _selectedFranchiser) {
-        _selectedFranchiser = _fundedFranchiser;
-        address[] memory _subDelegatees = _selectedFranchiser.subDelegatees();
-        if (_subDelegatees.length > 0) {
-            if (_subDelegateIndex >= _subDelegatees.length) {
-                _subDelegateIndex = bound(_subDelegateIndex, 0, _subDelegatees.length - 1);
-            }
-            vm.startPrank(address(_selectedFranchiser));
-            _selectedFranchiser = _selectedFranchiser.getFranchiser(_selectedFranchiser.subDelegatees()[_subDelegateIndex]);
-            vm.stopPrank();
-            _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
+    function _selectFranchiserForSubDelegation(
+        uint256 _franchiserIndex,
+        bool _treeBuildDesired
+    ) internal view returns (Franchiser _selectedFranchiser) {
+        if (fundedFranchisers.length() == 0) {
+            return Franchiser(address(0));
+        }
+        // sub-delegate from an existing sub-delegatee (if possible and requested) to aid in sub-delegation tree construction
+        if (_treeBuildDesired && (subDelegatedFranchisers.length() > 0)) {
+            _franchiserIndex = bound(_franchiserIndex, 0, subDelegatedFranchisers.length() - 1);
+            _selectedFranchiser = Franchiser(subDelegatedFranchisers.at(_franchiserIndex));
+            console2.log("Sub-delegating from sub-delegated franchiser");
+        } else {
+            _franchiserIndex = bound(_franchiserIndex, 0, fundedFranchisers.length() - 1);
+            _selectedFranchiser = Franchiser(fundedFranchisers.at(_franchiserIndex));
+            console2.log("Sub-delegating from funded franchiser");
+        }
+        if (_selectedFranchiser.subDelegatees().length >= _selectedFranchiser.maximumSubDelegatees()) {
+            console2.log("Warning::: Franchiser has reached maximum sub-delegatees");
+            return Franchiser(address(0));
+        }
+        if (votingToken.balanceOf(address(_selectedFranchiser)) == 0) {
+            console2.log("Warning::: Franchiser to subdelegate has no token balance");
+            return Franchiser(address(0));
         }
     }
 
@@ -177,13 +189,12 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
-    function factory_recall(uint256 _fundedFranchiserIndex, uint256 _subDelegateeIndex) external countCall("factory_recall") {
+    function factory_recall(uint256 _fundedFranchiserIndex) external countCall("factory_recall") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
         _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateeIndex);
         address _delegatee = _selectedFranchiser.delegatee();
         address _delegator = _selectedFranchiser.delegator();
 
@@ -267,17 +278,18 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // Invariant Handler functions for Franchiser contract
-    function franchiser_subDelegate(address _subDelegatee, uint256 _fundedFranchiserIndex, uint256 _subDelegateIndex, uint256 _subDelegateAmountFraction) external countCall("franchiser_subDelegate") {
-        if (fundedFranchisers.length() == 0) {
+    function franchiser_subDelegate(
+        address _subDelegatee,
+        uint256 _franchiserIndex,
+        uint256 _subDelegateAmountFraction,
+        bool _treeBuildDesired
+    ) external countCall("franchiser_subDelegate") {
+        Franchiser _selectedFranchiser = _selectFranchiserForSubDelegation(_franchiserIndex, _treeBuildDesired);
+        if (address(_selectedFranchiser) == address(0)) {
             return;
         }
-        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
-        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
         uint256 _amount = votingToken.balanceOf(address(_selectedFranchiser));
-        if (_amount == 0) {
-            return;
-        }
+
         address _delegatee = _selectedFranchiser.delegatee();
         vm.assume(_validActorAddress(_subDelegatee));
         vm.assume(_delegatee != _subDelegatee);
@@ -293,30 +305,25 @@ contract FranchiserFactoryHandler is Test {
 
     function franchiser_subDelegateMany(
         address[] memory _subDelegatees,
-        uint256 _fundedFranchiserIndex,
-        uint256 _subDelegateIndex
+        uint256 _franchiserIndex,
+        bool _treeBuildDesired
     ) external countCall("franchiser_subDelegateMany") {
-        if (fundedFranchisers.length() == 0) {
-            return;
-        }
         uint256 _numberOfDelegatees = _subDelegatees.length;
-        if (_numberOfDelegatees == 0) {
+        Franchiser _selectedFranchiser = _selectFranchiserForSubDelegation(_franchiserIndex, _treeBuildDesired);
+        if (address(_selectedFranchiser) == address(0)) {
             return;
         }
-        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
-        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        _selectedFranchiser = _getDeepestSubDelegateeInTree(_selectedFranchiser, _subDelegateIndex);
-        _numberOfDelegatees = bound(_numberOfDelegatees, 1, _selectedFranchiser.maximumSubDelegatees() - 1);
         uint256 _amountInFranchiser = votingToken.balanceOf(address(_selectedFranchiser));
-        if (_amountInFranchiser == 0) {
-            return;
-        }
+        _numberOfDelegatees = bound(_numberOfDelegatees, 1, _selectedFranchiser.maximumSubDelegatees() - 1);
 
-        address _delegatee = _selectedFranchiser.delegatee();
+        // calculate the amount to sub-delegate to each sub-delegatee
+        // (1 more than number delegatees, to make amount smaller to leave some in the franchiser)
         uint256 _subDelegateAmount = _amountInFranchiser / (_numberOfDelegatees + 1);
         if (_subDelegateAmount == 0) {
+            console2.log("Warning::: Sub-delegate amount after split for subDelegateMany is 0, skipping this sub-delegate attempt");
             return;
         }
+        address _delegatee = _selectedFranchiser.delegatee();
         uint256[] memory _amountsForSubDelegateMany = new uint256[](_numberOfDelegatees);
         address[] memory _subDelegateesForSubDelegateMany = new address[](_numberOfDelegatees);
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
@@ -405,7 +412,35 @@ contract FranchiserFactoryHandler is Test {
         _selectedFranchiser.recall(_delegator);
     }
 
-    function callSummary() external view {
+    // recursive function to get the depth of the sub-delegation tree of a given franchiser
+    function _getDeepestSubDelegationTree(Franchiser _fundedFranchiser) internal returns (uint256 depth) {
+        depth = 0;
+        for (uint256 i = 0; i < _fundedFranchiser.subDelegatees().length; i++) {
+            Franchiser _subDelegatedFranchiser = _fundedFranchiser.getFranchiser(_fundedFranchiser.subDelegatees()[i]);
+            uint256 _subDepth = _getDeepestSubDelegationTree(_subDelegatedFranchiser);
+            if (_subDepth > depth) {
+                depth = _subDepth;
+            }
+        }
+        depth++;
+    }
+
+    // function to find the depth of the funded franchiser with the deepest sub-delegatee tree
+    function calculateDeepestSubDelegationTree() private returns (uint256 deepest) {
+        deepest = 0;
+        for (uint256 i = 0; i < fundedFranchisers.length(); i++) {
+            Franchiser _fundedFranchiser = Franchiser(fundedFranchisers.at(i));
+            uint256 _subDelegateCount = _fundedFranchiser.subDelegatees().length;
+            if (_subDelegateCount > 0) {
+                uint256 _depth = _getDeepestSubDelegationTree(_fundedFranchiser);
+                if (_depth > deepest) {
+                    deepest = _depth;
+                }
+            }
+        }
+    } 
+
+    function callSummary() external {
         console2.log("\nCall summary:");
         console2.log("-------------------");
         console2.log("factory_fund", calls["factory_fund"].calls);
@@ -420,5 +455,6 @@ contract FranchiserFactoryHandler is Test {
         console2.log("franchiser_unSubDelegateMany", calls["franchiser_unSubDelegateMany"].calls);
         console2.log("franchiser_recall", calls["franchiser_recall"].calls);
         console2.log("-------------------\n");
+        console2.log("Deepest sub-delegation tree depth: %d", calculateDeepestSubDelegationTree());
     }
 }

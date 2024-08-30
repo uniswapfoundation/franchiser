@@ -45,7 +45,7 @@ contract FranchiseFactoryInvariantTest is Test {
     }
 
     // Used to see distribution of non-reverting calls
-    function invariant_callSummary() public view {
+    function invariant_callSummary() public {
         handler.callSummary();
     }
 }
