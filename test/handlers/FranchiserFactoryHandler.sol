@@ -337,29 +337,6 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // This function will do recalls only from Franchisers that have sub-delegatees
-    function franchiser_recall() external countCall("franchiser_recall") {
-        if (fundedFranchisers.length() == 0) {
-            return;
-        }
-        // find a funded franchiser that has sub-delegatees
-        uint256 _subDelegateCount = 0;
-        uint256 _fundedFranchiserIndex = 0;
-        while ( (_fundedFranchiserIndex < fundedFranchisers.length()) && (_subDelegateCount == 0)) {
-            _subDelegateCount = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex)).subDelegatees().length;
-            if (_subDelegateCount == 0) _fundedFranchiserIndex++;
-        }
-        if (_subDelegateCount == 0) {
-            return;
-        }
-        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        address _delegator = _selectedFranchiser.delegator();
-
-        // recall the delegated funds
-        vm.prank(_selectedFranchiser.owner());
-        _selectedFranchiser.recall(_delegator);
-    }
-
-    // This function will do recalls only from Franchisers that have sub-delegatees
     function franchiser_unSubDelegate() external countCall("franchiser_unSubDelegate") {
         if (fundedFranchisers.length() == 0) {
             return;
@@ -404,6 +381,29 @@ contract FranchiserFactoryHandler is Test {
         delete lastSubDelegatedFranchisersArray;
     }
 
+    // This function will do recalls only from Franchisers that have sub-delegatees
+    function franchiser_recall() external countCall("franchiser_recall") {
+        if (fundedFranchisers.length() == 0) {
+            return;
+        }
+        // find a funded franchiser that has sub-delegatees
+        uint256 _subDelegateCount = 0;
+        uint256 _fundedFranchiserIndex = 0;
+        while ( (_fundedFranchiserIndex < fundedFranchisers.length()) && (_subDelegateCount == 0)) {
+            _subDelegateCount = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex)).subDelegatees().length;
+            if (_subDelegateCount == 0) _fundedFranchiserIndex++;
+        }
+        if (_subDelegateCount == 0) {
+            return;
+        }
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        address _delegator = _selectedFranchiser.delegator();
+
+        // recall the delegated funds
+        vm.prank(_selectedFranchiser.owner());
+        _selectedFranchiser.recall(_delegator);
+    }
+
     function callSummary() external view {
         console2.log("\nCall summary:");
         console2.log("-------------------");
@@ -415,9 +415,9 @@ contract FranchiserFactoryHandler is Test {
         console2.log("factory_permitAndFundMany", calls["factory_permitAndFundMany"].calls);
         console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
         console2.log("franchiser_subDelegateMany", calls["franchiser_subDelegateMany"].calls);
-        console2.log("franchiser_recall", calls["franchiser_recall"].calls);
         console2.log("franchiser_unSubDelegate", calls["franchiser_unSubDelegate"].calls);
         console2.log("franchiser_unSubDelegateMany", calls["franchiser_unSubDelegateMany"].calls);
+        console2.log("franchiser_recall", calls["franchiser_recall"].calls);
         console2.log("-------------------\n");
     }
 }
