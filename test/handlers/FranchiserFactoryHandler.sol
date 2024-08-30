@@ -57,7 +57,8 @@ contract FranchiserFactoryHandler is Test {
         valid = (_address != address(0))
             && (
                 _address != address(votingToken) && (_address != address(factory))
-                    && (!fundedFranchisers.contains(_address))
+                    && (!fundedFranchisers.contains(_address)
+                    && (!subDelegatedFranchisers.contains(_address)))
             );
     }
 
