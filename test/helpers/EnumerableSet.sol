@@ -4,6 +4,7 @@
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/structs/EnumerableSet.sol
 
 // Added reduce function to EnumerableSet.AddressSet to reduce the set to a single value
+// Added add function to EnumerableSet.AddressSet to add an array of values to the set
 
 // OpenZeppelin Contracts (last updated v4.7.0) (utils/structs/EnumerableSet.sol)
 
@@ -237,6 +238,16 @@ library EnumerableSet {
      */
     function add(AddressSet storage set, address value) internal returns (bool) {
         return _add(set._inner, bytes32(uint256(uint160(value))));
+    }
+
+    /**
+     * @dev Add a an array of values to a set. O(n).
+     *
+     */
+    function add(AddressSet storage set, address[] memory value) internal {
+        for (uint256 i; i < value.length; ++i) {
+            _add(set._inner, bytes32(uint256(uint160(value[i]))));
+        }
     }
 
     /**

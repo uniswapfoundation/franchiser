@@ -15,11 +15,17 @@ contract FranchiserFactoryHandler is Test {
     Franchiser public franchiser;
     VotingTokenConcrete public votingToken;
 
+    // Struct for tracking the number of calls to each handler function
     struct CallCounts {
         uint256 calls;
     }
 
+    // Handler ghost mapping to track the number of calls to each handler function
     mapping(bytes32 => CallCounts) public calls;
+
+    // Handler-updated booleans to track balance and voting power updates were correctly calculated
+    bool public balances_updated_correctly;
+    bool public voting_powers_updated_correctly;
 
     // Handler ghost AddressSet to contain all the funded franchisers created by the FranchiserFactory
     EnumerableSet.AddressSet private fundedFranchisers;
@@ -46,6 +52,8 @@ contract FranchiserFactoryHandler is Test {
         factory = _factory;
         votingToken = VotingTokenConcrete(address(factory.votingToken()));
         franchiser = new Franchiser(IVotingToken(address(votingToken)));
+        balances_updated_correctly = true;
+        voting_powers_updated_correctly = true;
     }
 
     modifier countCall(bytes32 key) {
@@ -66,6 +74,13 @@ contract FranchiserFactoryHandler is Test {
         return bound(_amount, 0, 100_000_000e18);
     }
 
+    // function to get the amount of voting power held by a franchiser for a given delegator and delegatee
+    // (used to get balance of a franchiser via pre-calculated address that may have been deployed previously)
+    function _getAmountInFranchiserGivenDelegatorAndDelegatee(address _delegator, address _delegatee) internal view returns (uint256) {
+        Franchiser _franchiser = factory.getFranchiser(_delegator, _delegatee);
+        return votingToken.balanceOf(address(_franchiser));
+    }
+
     // Recursive function to get the sum tokens held in the sub-delegation tree of a given franchiser
     function _getTotalAmountDelegatedByFranchiser(address _franchiserAddress) internal returns (uint256 totalAmount) {
         Franchiser _franchiser = Franchiser(_franchiserAddress);
@@ -81,6 +96,40 @@ contract FranchiserFactoryHandler is Test {
     // function to get a balance for the reduce functions
     function _getAccountBalance(address _account) internal view returns (uint256 balance) {
         balance = votingToken.balanceOf(_account);
+    }
+
+    // function to get total voting power delegated to the all of delegatees in the delegatees AddressSet
+    function _getTotalVotingPowerOfAllDelegatees() internal view returns (uint256 totalVotingPower) {
+        totalVotingPower = 0;
+        for (uint256 i = 0; i < delegatees.length(); i++) {
+            totalVotingPower += votingToken.getVotes(delegatees.at(i));
+        }
+    }
+
+    // function that takes an array of addresses as a parameter and returns an array with duplicates removed
+    function _removeDuplicates(address[] memory _addresses) internal pure returns (address[] memory) {
+        if (_addresses.length == 0) {
+            return _addresses;
+        }
+        uint256 _newLength = 1;
+        for (uint256 i = 1; i < _addresses.length; i++) {
+            bool _isDuplicate = false;
+            for (uint256 j = 0; j < _newLength; j++) {
+                if (_addresses[i] == _addresses[j]) {
+                    _isDuplicate = true;
+                    break;
+                }
+            }
+            if (!_isDuplicate) {
+                _addresses[_newLength] = _addresses[i];
+                _newLength++;
+            }
+        }
+        address[] memory _uniqueAddresses = new address[](_newLength);
+        for (uint256 k = 0; k < _newLength; k++) {
+            _uniqueAddresses[k] = _addresses[k];
+        }
+        return _uniqueAddresses;
     }
 
     // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount delegated by all funded franchisers
@@ -143,10 +192,18 @@ contract FranchiserFactoryHandler is Test {
         vm.assume(_validActorAddress(_delegator));
         _amount = _boundAmount(_amount);
         votingToken.mint(_delegator, _amount);
+        uint256 _delegatorBalanceBefore = votingToken.balanceOf(_delegator);
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
+        uint256 _amountInFranchiserBefore = _getAmountInFranchiserGivenDelegatorAndDelegatee(_delegator, _delegatee);
         vm.startPrank(_delegator);
         votingToken.approve(address(factory), _amount);
         franchiser = factory.fund(_delegatee, _amount);
         vm.stopPrank();
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_delegatorBalanceBefore - _amount) == votingToken.balanceOf(_delegator);
+        voting_powers_updated_correctly = (_delegateeVotingPowerBefore + _amount) == votingToken.getVotes(_delegatee);
 
         // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         fundedFranchisers.add(address(franchiser));
@@ -154,23 +211,38 @@ contract FranchiserFactoryHandler is Test {
         // add the delegator and delegatee to the delegators and delegatees AddressSets for tracking totals invariants
         delegators.add(_delegator);
         delegatees.add(_delegatee);
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = ((_delegatorBalanceBefore - _amount) == votingToken.balanceOf(_delegator))
+                                    && (_amountInFranchiserBefore + _amount) == votingToken.balanceOf(address(franchiser));
+        voting_powers_updated_correctly = (_delegateeVotingPowerBefore + _amount) == votingToken.getVotes(_delegatee)
+                                         && _totalVotingPowerBefore + _amount == _getTotalVotingPowerOfAllDelegatees();
     }
 
-    function factory_fundMany(address _delegator, address[] memory _delegatees, uint256 _baseAmount)
+    function factory_fundMany(address _delegator, address[] memory _rawDelegatees, uint256 _baseAmount)
         external
         countCall("factory_fundMany")
     {
+        address[] memory _delegatees = _removeDuplicates(_rawDelegatees);
         uint256 _numberOfDelegatees = _delegatees.length;
         _baseAmount = _boundAmount(_baseAmount);
         vm.assume(_validActorAddress(_delegator));
         uint256[] memory _amountsForFundMany = new uint256[](_numberOfDelegatees);
+
+        uint256[] memory _delegateeVotingPowersBefore = new uint256[](_numberOfDelegatees);
+        uint256[] memory _franchiserBalancesBefore = new uint256[](_numberOfDelegatees);
         uint256 _totalAmountToMintAndApprove = 0;
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            _delegateeVotingPowersBefore[i] = votingToken.getVotes(_delegatees[i]);
+            _franchiserBalancesBefore[i] = _getAmountInFranchiserGivenDelegatorAndDelegatee(_delegator, _delegatees[i]);
             uint256 _amount = _baseAmount + i;
             _amountsForFundMany[i] = _amount;
             _totalAmountToMintAndApprove += _amount;
         }
         votingToken.mint(_delegator, _totalAmountToMintAndApprove);
+        uint256 _delegatorBalanceBefore = votingToken.balanceOf(_delegator);
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
+
         vm.startPrank(_delegator);
         votingToken.approve(address(factory), _totalAmountToMintAndApprove);
 
@@ -183,9 +255,21 @@ contract FranchiserFactoryHandler is Test {
         delegators.add(_delegator);
 
         // add the created franchisers and the delegatees to their appropriate AddressSets for tracking totals invariants
-        for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
-            fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
-            delegatees.add(_delegatees[j]);
+        for (uint256 i = 0; i < lastFundedFranchisersArray.length; i++) {
+            fundedFranchisers.add(address(lastFundedFranchisersArray[i]));
+        }
+        delegatees.add(_delegatees);
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_delegatorBalanceBefore - _totalAmountToMintAndApprove) == votingToken.balanceOf(_delegator);
+        voting_powers_updated_correctly = _totalVotingPowerBefore + _totalAmountToMintAndApprove == _getTotalVotingPowerOfAllDelegatees();
+        for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            if (votingToken.balanceOf(address(lastFundedFranchisersArray[i])) != (_franchiserBalancesBefore[i] + _amountsForFundMany[i])) {
+                balances_updated_correctly = false;
+            }
+            if ((_delegateeVotingPowersBefore[i] + _amountsForFundMany[i]) != votingToken.getVotes(_delegatees[i])) {
+                voting_powers_updated_correctly = false;
+            }
         }
     }
 
@@ -197,10 +281,21 @@ contract FranchiserFactoryHandler is Test {
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
         address _delegatee = _selectedFranchiser.delegatee();
         address _delegator = _selectedFranchiser.delegator();
+        uint256 _delegatorBalanceBefore = votingToken.balanceOf(_delegator);
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
+
+        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
+        uint256 _amountInFranchiser = votingToken.balanceOf(address(_selectedFranchiser));
 
         // recall of delegated funds to the delegator
         vm.prank(_delegator);
         factory.recall(_delegatee, _delegator);
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_delegatorBalanceBefore + _amount) == votingToken.balanceOf(_delegator);
+        voting_powers_updated_correctly = ((_delegateeVotingPowerBefore - _amountInFranchiser) == votingToken.getVotes(_delegatee))
+                                         && _totalVotingPowerBefore - _amount == _getTotalVotingPowerOfAllDelegatees();
     }
 
     // This function will do a factory recall call for a subset of the last funded franchisers created by the factory (fundMan or permitAndFundMany)
@@ -273,8 +368,8 @@ contract FranchiserFactoryHandler is Test {
         // add the created franchisers and delegatees to the appropriate AddressSets for tracking total invariants
         for (uint256 j = 0; j < lastFundedFranchisersArray.length; j++) {
             fundedFranchisers.add(address(lastFundedFranchisersArray[j]));
-            delegatees.add(_delegatees[j]);
         }
+        delegatees.add(_delegatees);
     }
 
     // Invariant Handler functions for Franchiser contract
@@ -298,9 +393,12 @@ contract FranchiserFactoryHandler is Test {
         vm.prank(_delegatee);
         Franchiser _subDelegatedFranchiser = _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
 
-        // add the subDelegated franchiser to the subDelegatedFranchisers AddressSet so it can be foound
-        // for later removal by unsubDelegate, and for use in future subDelegations, prefering subdelegatees for tree creation
+        // add the subDelegated franchiser to the subDelegatedFranchisers AddressSet so it can be found
+        // for use in future subDelegations, prefering subdelegatees for tree creation
         subDelegatedFranchisers.add(address(_subDelegatedFranchiser));
+
+        // add the subDelegatee to the delegatees AddressSet for tracking totals invariants
+        delegatees.add(_subDelegatee);
     }
 
     function franchiser_subDelegateMany(
@@ -338,10 +436,13 @@ contract FranchiserFactoryHandler is Test {
         lastSubDelegatingFranchiser = _selectedFranchiser;
 
         // add the subDelegated franchisers to the subDelegatedFranchisers AddressSet so they can be found
-        // for later removal by unsubDelegate, and for use in future subDelegations, prefering subdelegatees for tree creation
+        // for use in future subDelegations, prefering subdelegatees for tree creation
         for (uint256 j = 0; j < lastSubDelegatedFranchisersArray.length; j++) {
             subDelegatedFranchisers.add(address(lastSubDelegatedFranchisersArray[j]));
         }
+
+        // add the subDelegatees to the delegatees AddressSet for tracking totals invariants
+        delegatees.add(_subDelegatees);
     }
 
     // This function will do recalls only from Franchisers that have sub-delegatees
