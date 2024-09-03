@@ -127,12 +127,15 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // function that takes an array of addresses as a parameter and returns an array with duplicates removed
-    function _removeDuplicates(address[] memory _addresses) internal pure returns (address[] memory) {
+    function _removeDuplicatesOrMatchingAddress(address[] memory _addresses, address _addressToRemove) internal pure returns (address[] memory) {
         if (_addresses.length == 0) {
             return _addresses;
         }
         uint256 _newLength = 1;
         for (uint256 i = 1; i < _addresses.length; i++) {
+            if (_addresses[i] == _addressToRemove) {
+                continue; // Skip the address if it matches _addressToRemove
+            }
             bool _isDuplicate = false;
             for (uint256 j = 0; j < _newLength; j++) {
                 if (_addresses[i] == _addresses[j]) {
@@ -152,36 +155,16 @@ contract FranchiserFactoryHandler is Test {
         return _uniqueAddresses;
     }
 
-    // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount delegated by all funded franchisers
-    // function _reduceFranchiserBalances(
-    //     uint256 acc,
-    //     function(address) returns (uint256) func)
-    //     internal returns (uint256)
-    // {
-    //     return fundedFranchisers.reduce(acc, func);
-    // }
-
-    // function to use the EnumerableSet.AddressSet reduce function to get the sum of the total amount recalled to delegators by funded franchisers
-    // function _reduceDelegatorBalances(
-    //     uint256 acc,
-    //     function(address) returns (uint256) func)
-    //     internal returns (uint256)
-    // {
-    //     return delegators.reduce(acc, func);
-    // }
-
     // public function (callable by invariant tests) to get the sum of the total amount delegated by all funded franchisers
     function sumFundedFranchisersBalances() public returns (uint256 sum) {
         uint256 acc = 0;
         sum = fundedFranchisers.reduce(acc, _getTotalAmountDelegatedByFranchiser);
-        // sum = _reduceFranchiserBalances(0, _getTotalAmountDelegatedByFranchiser);
     }
 
     // function to get the sum of all delegatees balances
     function sumDelegatorsBalances() public returns (uint256 sum) {
         uint256 acc = 0;
         sum = delegators.reduce(acc, _getAccountBalance);
-        // sum = _reduceDelegatorBalances(0, _getAccountBalance);
     }
 
     function _selectFranchiserForSubDelegation(
@@ -245,7 +228,7 @@ contract FranchiserFactoryHandler is Test {
         external
         countCall("factory_fundMany")
     {
-        address[] memory _delegatees = _removeDuplicates(_rawDelegatees);
+        address[] memory _delegatees = _removeDuplicatesOrMatchingAddress(_rawDelegatees, address(0));
         uint256 _numberOfDelegatees = _delegatees.length;
         _baseAmount = _boundAmount(_baseAmount);
         vm.assume(_validActorAddress(_delegator));
@@ -403,7 +386,7 @@ contract FranchiserFactoryHandler is Test {
         external
         countCall("factory_permitAndFundMany")
     {
-        address[] memory _delegatees = _removeDuplicates(_rawDelegatees);
+        address[] memory _delegatees = _removeDuplicatesOrMatchingAddress(_rawDelegatees, address(0));
         uint256 _numberOfDelegatees = _delegatees.length;
         _amount = _bound(_amount, 1, 10_000e18);
         (address _delegator, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) =
@@ -505,15 +488,17 @@ contract FranchiserFactoryHandler is Test {
     }
 
     function franchiser_subDelegateMany(
-        address[] memory _subDelegatees,
+        address[] memory _rawSubDelegatees,
         uint256 _franchiserIndex,
         bool _treeBuildDesired
     ) external countCall("franchiser_subDelegateMany") {
-        uint256 _numberOfDelegatees = _subDelegatees.length;
         Franchiser _selectedFranchiser = _selectFranchiserForSubDelegation(_franchiserIndex, _treeBuildDesired);
         if (address(_selectedFranchiser) == address(0)) {
             return;
         }
+        address _delegatee = _selectedFranchiser.delegatee();        
+        address[] memory _subDelegatees = _removeDuplicatesOrMatchingAddress(_rawSubDelegatees, _delegatee);
+        uint256 _numberOfDelegatees = _subDelegatees.length;
         uint256 _amountInFranchiser = votingToken.balanceOf(address(_selectedFranchiser));
         _numberOfDelegatees = bound(_numberOfDelegatees, 1, _selectedFranchiser.maximumSubDelegatees() - 1);
 
@@ -524,13 +509,22 @@ contract FranchiserFactoryHandler is Test {
             console2.log("Warning::: Sub-delegate amount after split for subDelegateMany is 0, skipping this sub-delegate attempt");
             return;
         }
-        address _delegatee = _selectedFranchiser.delegatee();
         uint256[] memory _amountsForSubDelegateMany = new uint256[](_numberOfDelegatees);
         address[] memory _subDelegateesForSubDelegateMany = new address[](_numberOfDelegatees);
+        uint256[] memory _delegateeVotingPowersBefore = new uint256[](_numberOfDelegatees);
+        uint256[] memory _franchiserBalancesBefore = new uint256[](_numberOfDelegatees);
+        uint256[] memory _franchiserDelegatedBefore = new uint256[](_numberOfDelegatees);
+        address[] memory _subDelegateFranchiserAddress = new address[](_numberOfDelegatees);
+        uint256 _totalAmountSubDelegated = 0;
         for (uint256 i = 0; i < _numberOfDelegatees; i++) {
             _subDelegateesForSubDelegateMany[i] = _subDelegatees[i];
+            _totalAmountSubDelegated += _subDelegateAmount;
             _amountsForSubDelegateMany[i] = _subDelegateAmount;
+            _delegateeVotingPowersBefore[i] = votingToken.getVotes(_subDelegatees[i]);
+            (_franchiserBalancesBefore[i], _franchiserDelegatedBefore[i], _subDelegateFranchiserAddress[i]) = _getFranchiserBalanceAndTotalAmountDelegated(address(_selectedFranchiser), _subDelegatees[i]);
         }
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(_selectedFranchiser));
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
 
         // clear the storage of the lastSubDelegatedFranchisersArray and create a new one with call to subDelegateMany
         delete lastSubDelegatedFranchisersArray;
@@ -546,6 +540,21 @@ contract FranchiserFactoryHandler is Test {
 
         // add the subDelegatees to the delegatees AddressSet for tracking totals invariants
         delegatees.add(_subDelegatees);
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_franchiserBalanceBefore - _totalAmountSubDelegated) == votingToken.balanceOf(address(_selectedFranchiser));
+        voting_powers_updated_correctly = _totalVotingPowerBefore == _getTotalVotingPowerOfAllDelegatees();
+        for (uint256 i = 0; i < _numberOfDelegatees; i++) {
+            if (votingToken.balanceOf(address(lastSubDelegatedFranchisersArray[i])) != (_franchiserBalancesBefore[i] + _amountsForSubDelegateMany[i])) {
+                balances_updated_correctly = false;
+            }
+            if (_franchiserDelegatedBefore[i] + _amountsForSubDelegateMany[i] != _getTotalAmountDelegatedByFranchiser(address(lastSubDelegatedFranchisersArray[i]))) {
+                balances_updated_correctly = false;
+            }
+            if ((_delegateeVotingPowersBefore[i] + _amountsForSubDelegateMany[i]) != votingToken.getVotes(_subDelegatees[i])) {
+                voting_powers_updated_correctly = false;
+            }
+        }
     }
 
     // This function will do recalls only from Franchisers that have sub-delegatees
@@ -589,7 +598,7 @@ contract FranchiserFactoryHandler is Test {
         vm.prank(lastSubDelegatingFranchiser.delegatee());
         lastSubDelegatingFranchiser.unSubDelegateMany(_delegateesForUnSubDelegateMany);
 
-        // empty the lastFundedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
+        // empty the lastSubDelegatedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
         delete lastSubDelegatedFranchisersArray;
     }
 
