@@ -557,8 +557,8 @@ contract FranchiserFactoryHandler is Test {
         }
     }
 
-    // This function will do recalls only from Franchisers that have sub-delegatees
-    function franchiser_unSubDelegate() external countCall("franchiser_unSubDelegate") {
+    // This function will do unSubDelegate call only from Franchisers that have sub-delegatees
+    function franchiser_unSubDelegate(uint256 _subDelegateeIndex) external countCall("franchiser_unSubDelegate") {
         if (fundedFranchisers.length() == 0) {
             return;
         }
@@ -573,12 +573,29 @@ contract FranchiserFactoryHandler is Test {
             return;
         }
         Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
-        address _delegator = _selectedFranchiser.delegator();
+        _subDelegateeIndex = bound(_subDelegateeIndex, 0, _selectedFranchiser.subDelegatees().length - 1);
         address _delegatee = _selectedFranchiser.delegatee();
+        address _subDelegatee = _selectedFranchiser.subDelegatees()[_subDelegateeIndex];
+        Franchiser _subDelegatedFranchiser = _selectedFranchiser.getFranchiser(_subDelegatee);
+
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(_selectedFranchiser));
+        uint256 _subDelegatedFranchiserBalanceBefore = votingToken.balanceOf(address(_subDelegatedFranchiser));
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+        uint256 _subDelegateeVotingPowerBefore = votingToken.getVotes(_subDelegatee);
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
+        uint256 _amount = _getTotalAmountDelegatedByFranchiser(address(_subDelegatedFranchiser));
+
 
         // recall the delegated funds
         vm.prank(_delegatee);
-        _selectedFranchiser.unSubDelegate(_delegator);
+        _selectedFranchiser.unSubDelegate(_subDelegatee);
+
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_franchiserBalanceBefore + _amount) == votingToken.balanceOf(address(_selectedFranchiser))
+                                    && (_subDelegatedFranchiserBalanceBefore - _amount) == votingToken.balanceOf(address(_subDelegatedFranchiser));
+        voting_powers_updated_correctly = ((_delegateeVotingPowerBefore + _amount) == votingToken.getVotes(_delegatee))
+                                         && ((_subDelegateeVotingPowerBefore - _amount) == votingToken.getVotes(_subDelegatee))
+                                         && _totalVotingPowerBefore == _getTotalVotingPowerOfAllDelegatees();
     }
 
     // This function will do a franchiser unsubdelegate call for a subset of the last sub-delegated franchisers done by a franchiser
@@ -600,6 +617,8 @@ contract FranchiserFactoryHandler is Test {
 
         // empty the lastSubDelegatedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
         delete lastSubDelegatedFranchisersArray;
+
+        // TODO: check if the balances and voting power were updated correctly
     }
 
     // This function will do recalls only from Franchisers that have sub-delegatees
@@ -623,6 +642,8 @@ contract FranchiserFactoryHandler is Test {
         // recall the delegated funds
         vm.prank(_selectedFranchiser.owner());
         _selectedFranchiser.recall(_delegator);
+
+        // TODO: check if the balances and voting power were updated correctly
     }
 
     // recursive function to get the depth of the sub-delegation tree of a given franchiser
