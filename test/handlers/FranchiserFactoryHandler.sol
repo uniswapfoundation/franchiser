@@ -26,8 +26,12 @@ contract FranchiserFactoryHandler is Test {
     mapping(bytes32 => CallCounts) public calls;
 
     // Handler ghost address set and mapping to track the balance of every address that is used in the invariant tests
-    EnumerableSet.AddressSet private accountAddresses;
+    EnumerableSet.AddressSet private accountBalanceAddresses;
     mapping(address => uint256) private accountBalances;
+
+    // Handler ghost address set and mapping to track the voting power of every address that is used in the invariant tests
+    EnumerableSet.AddressSet private accountVotingPowerAddresses;
+    mapping(address => uint256) private accountVotingPowers;
 
     // Handler ghost AddressSet to contain all the funded franchisers created by the FranchiserFactory
     EnumerableSet.AddressSet private fundedFranchisers;
@@ -63,8 +67,8 @@ contract FranchiserFactoryHandler is Test {
 
     // function to increase the accountBalances mapping by a given amount the  of an account
     function _increaseAccountBalance(address _account, uint256 _amount) private {
-        if (!accountAddresses.contains(_account)) {
-            accountAddresses.add(_account);
+        if (!accountBalanceAddresses.contains(_account)) {
+            accountBalanceAddresses.add(_account);
             accountBalances[_account] = 0;
         }
         accountBalances[_account] += _amount;
@@ -72,10 +76,27 @@ contract FranchiserFactoryHandler is Test {
 
     // function to increase the accountBalances mapping by a given amount the  of an account
     function _decreaseAccountBalance(address _account, uint256 _amount) private {
-        if (!accountAddresses.contains(_account)) {
-            console2.log("Account not found in accountAddresses on _decreaseAccountBalance");
+        if (!accountBalanceAddresses.contains(_account)) {
+            console2.log("Account not found in accountBalanceAddresses on _decreaseAccountBalance");
         }
         accountBalances[_account] -= _amount;
+    }
+
+    // function to increase the accountBalances mapping by a given amount the  of an account
+    function _increaseAccountVotingPower(address _account, uint256 _amount) private {
+        if (!accountVotingPowerAddresses.contains(_account)) {
+            accountVotingPowerAddresses.add(_account);
+            accountVotingPowers[_account] = 0;
+        }
+        accountVotingPowers[_account] += _amount;
+    }
+
+    // function to increase the accountBalances mapping by a given amount the  of an account
+    function _decreaseAccountVotingPower(address _account, uint256 _amount) private {
+        if (!accountVotingPowerAddresses.contains(_account)) {
+            console2.log("Account not found in accountVotingPowerAddresses on _decreaseAccountVotingPower");
+        }
+        accountVotingPowers[_account] -= _amount;
     }
 
     function _validActorAddress(address _address) internal view returns (bool valid) {
@@ -185,9 +206,21 @@ contract FranchiserFactoryHandler is Test {
     // function to validate the account balances in the mapping match the actual balances
     function validateAccountBalances() public view returns (bool valid) {
         valid = true;
-        for (uint256 i = 0; i < accountAddresses.length(); i++) {
-            address _account = accountAddresses.at(i);
+        for (uint256 i = 0; i < accountBalanceAddresses.length(); i++) {
+            address _account = accountBalanceAddresses.at(i);
             if (accountBalances[_account] != votingToken.balanceOf(_account)) {
+                valid = false;
+                break;
+            }
+        }
+    }
+
+    // function to validate the account balances in the mapping match the actual balances
+    function validateAccountVotingPowers() public view returns (bool valid) {
+        valid = true;
+        for (uint256 i = 0; i < accountVotingPowerAddresses.length(); i++) {
+            address _account = accountVotingPowerAddresses.at(i);
+            if (accountVotingPowers[_account] != votingToken.getVotes(_account)) {
                 valid = false;
                 break;
             }
@@ -239,9 +272,10 @@ contract FranchiserFactoryHandler is Test {
         delegators.add(_delegator);
         delegatees.add(_delegatee);
 
-        // update the balance of the delegator and delegatee in the accountBalances mapping
+        // update the balance of the delegator andfranchiser and update the voting power of delegatee in the mappings
         _decreaseAccountBalance(_delegator, _amount);
         _increaseAccountBalance(address(franchiser), _amount);
+        _increaseAccountVotingPower(_delegatee, _amount);
     }
 
     function factory_fundMany(address _delegator, address[] memory _rawDelegatees, uint256 _baseAmount)

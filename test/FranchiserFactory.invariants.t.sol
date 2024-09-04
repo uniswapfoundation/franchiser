@@ -44,9 +44,10 @@ contract FranchiseFactoryInvariantTest is Test {
         );
     }
 
-    function invariant_updated_balances_correctly() external {
+    function invariant_updated_balances_and_voting_powers_correctly() external {
         handler.callSummary();
         assertTrue(handler.validateAccountBalances());
+        assertTrue(handler.validateAccountVotingPowers());
     }
 
     // Used to see distribution of non-reverting calls
