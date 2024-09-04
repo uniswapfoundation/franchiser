@@ -600,25 +600,53 @@ contract FranchiserFactoryHandler is Test {
 
     // This function will do a franchiser unsubdelegate call for a subset of the last sub-delegated franchisers done by a franchiser
     function franchiser_unSubDelegateMany(uint256 _numberFranchisersToUnSubDelegate) external countCall("franchiser_unSubDelegateMany") {
-        if (lastSubDelegatedFranchisersArray.length < 3) {
+        if (lastSubDelegatedFranchisersArray.length == 0) {
+            console2.log("No sub-delegated franchisers to un-sub-delegate, skipping this call");
             delete lastSubDelegatedFranchisersArray;
             return;
         }
-        _numberFranchisersToUnSubDelegate = bound(_numberFranchisersToUnSubDelegate, 1, lastSubDelegatedFranchisersArray.length - 1);
+        Franchiser _selectedFranchiser = lastSubDelegatingFranchiser;
+        address _delegatee = _selectedFranchiser.delegatee();
+        _numberFranchisersToUnSubDelegate = bound(_numberFranchisersToUnSubDelegate, 1, lastSubDelegatedFranchisersArray.length);
 
         address[] memory _delegateesForUnSubDelegateMany = new address[](_numberFranchisersToUnSubDelegate);
+        uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(_selectedFranchiser));
+
+        uint256 _delegateeVotingPowerBefore = votingToken.getVotes(_delegatee);
+
+        Franchiser[] memory _subDelegatedFranchisers = new Franchiser[](_numberFranchisersToUnSubDelegate);
+        uint256[] memory _subDelegatedFranchiserBalancesBefore = new uint256[](_numberFranchisersToUnSubDelegate);
+        uint256[] memory _subDelegateeVotingPowersBefore = new uint256[](_numberFranchisersToUnSubDelegate);
+        uint256[] memory _amountsDelegatedBySubDelegatees = new uint256[](_numberFranchisersToUnSubDelegate);
+        uint256 _totalVotingPowerBefore = _getTotalVotingPowerOfAllDelegatees();
+        uint256 _totalAmountSubDelegated = 0;
 
         for (uint256 i = 0; i < _numberFranchisersToUnSubDelegate; i++) {
-            Franchiser _franchiser = Franchiser(lastSubDelegatedFranchisersArray[i]);
-            _delegateesForUnSubDelegateMany[i] = _franchiser.delegatee();
+            _subDelegatedFranchisers[i] = Franchiser(lastSubDelegatedFranchisersArray[i]);
+            _delegateesForUnSubDelegateMany[i] = _subDelegatedFranchisers[i].delegatee();
+            _subDelegatedFranchiserBalancesBefore[i] = votingToken.balanceOf(address(_subDelegatedFranchisers[i]));
+            _subDelegateeVotingPowersBefore[i] = votingToken.getVotes(_delegateesForUnSubDelegateMany[i]);
+            _amountsDelegatedBySubDelegatees[i] = _getTotalAmountDelegatedByFranchiser(address(_subDelegatedFranchisers[i]));
+            _totalAmountSubDelegated += _amountsDelegatedBySubDelegatees[i];
         }
         vm.prank(lastSubDelegatingFranchiser.delegatee());
         lastSubDelegatingFranchiser.unSubDelegateMany(_delegateesForUnSubDelegateMany);
 
+        // check if the balances and voting power were updated correctly
+        balances_updated_correctly = (_franchiserBalanceBefore + _totalAmountSubDelegated) == votingToken.balanceOf(address(_selectedFranchiser));
+        voting_powers_updated_correctly = (_totalVotingPowerBefore  == _getTotalVotingPowerOfAllDelegatees())
+                                        && (_delegateeVotingPowerBefore + _totalAmountSubDelegated == votingToken.getVotes(_delegatee));
+        for (uint256 i = 0; i < _numberFranchisersToUnSubDelegate; i++) {
+            if (votingToken.balanceOf(address(lastSubDelegatedFranchisersArray[i])) != (_subDelegatedFranchiserBalancesBefore[i] - _amountsDelegatedBySubDelegatees[i])) {
+                balances_updated_correctly = false;
+            }
+            if ((_subDelegateeVotingPowersBefore[i] - _amountsDelegatedBySubDelegatees[i]) != votingToken.getVotes(_delegateesForUnSubDelegateMany[i])) {
+                voting_powers_updated_correctly = false;
+            }
+        }
+
         // empty the lastSubDelegatedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
         delete lastSubDelegatedFranchisersArray;
-
-        // TODO: check if the balances and voting power were updated correctly
     }
 
     // This function will do recalls only from Franchisers that have sub-delegatees
