@@ -46,12 +46,18 @@ contract FranchiseFactoryInvariantTest is Test {
 
     function invariant_updated_balances_and_voting_powers_correctly() external {
         handler.callSummary();
-        assertTrue(handler.validateAccountBalances());
-        assertTrue(handler.validateAccountVotingPowers());
+        handler.forEachHolderAddress(this.assertHolderBalancesAndVotingPowersAreCorrect);
     }
 
     // Used to see distribution of non-reverting calls
     function invariant_callSummary() public {
         handler.callSummary();
     }
+
+    function assertHolderBalancesAndVotingPowersAreCorrect(address holder) external view {
+        (uint256 _balance, uint256 _votingPower) = handler.ghost_holders(holder);
+        assertEq(_balance, token.balanceOf(holder));
+        assertEq(_votingPower, token.getVotes(holder));
+    }
+
 }

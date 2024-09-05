@@ -303,6 +303,16 @@ library EnumerableSet {
         return acc;
     }
 
+    // Foreach function to execute a function on every member of the AddresSet.
+    function forEach(
+        AddressSet storage set,
+        function(address) external func
+    ) internal {
+        for (uint256 i; i < length(set); ++i) {
+            func(address(uint160(uint256(_at(set._inner, i)))));
+        }
+    }
+
     /**
      * @dev Return the entire set in an array
      *
