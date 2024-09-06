@@ -25,6 +25,10 @@ contract FranchiserFactoryHandler is Test {
     // Handler ghost mapping to track the number of calls to each handler function
     mapping(bytes32 => CallCounts) public calls;
 
+    // Handler ghost variables to track total funded and total recalled amounts
+    uint256 public ghost_totalFunded;
+    uint256 public ghost_totalRecalled;
+
     // Handler ghost AddressSet to contain all the funded franchisers created by the FranchiserFactory
     EnumerableSet.AddressSet private fundedFranchisers;
     mapping(address => uint256) public ghost_fundedFranchiserBalances;
@@ -206,6 +210,9 @@ contract FranchiserFactoryHandler is Test {
         // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         _increaseFundedFranchiserAccountBalance(franchiser, _amount);
 
+        // update the total funded amount for the handler
+        ghost_totalFunded += _amount;
+
         // add the delegator and delegatee to the delegators and delegatees AddressSets for tracking totals invariants
         delegators.add(_delegator);
         delegatees.add(_delegatee);
@@ -240,10 +247,14 @@ contract FranchiserFactoryHandler is Test {
         // add the delegator to the delegators AddressSets for tracking totals invariants
         delegators.add(_delegator);
 
-        // add the created franchisers and the delegatees to their appropriate AddressSets and mappings for tracking totals invariants
+        // add the created franchisers the AddressSet and update for tracking totals invariants
         for (uint256 i = 0; i < lastFundedFranchisersArray.length; i++) {
             _increaseFundedFranchiserAccountBalance(lastFundedFranchisersArray[i], _amountsForFundMany[i]);
+            ghost_totalFunded += _amountsForFundMany[i];
+
         }
+
+        // add the created delegatees to the AddressSet
         delegatees.add(_delegatees);
     }
 
@@ -259,8 +270,9 @@ contract FranchiserFactoryHandler is Test {
         // before the recall, get the total amount delegated by the franchiser to be recalled  (including amounts it may have sub-delegated)
         uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
         
-        // decrease the funded franchiser balance mapping by the amount recalled
+        // decrease the funded franchiser balance mapping and bump the total recalled ghost var by the amount recalled
         _decreaseFundedFranchiserAccountBalance(_selectedFranchiser, _amountRecalled);
+        ghost_totalRecalled += _amountRecalled;
 
         // recall of delegated funds to the delegator
         vm.prank(_delegator);
@@ -285,8 +297,10 @@ contract FranchiserFactoryHandler is Test {
             _targetsForRecallMany[i] = _delegator;
 
             // decrease the funded franchiser balance mapping by the amount recalled (including amounts it may have sub-delegated)
+            // also bump the total recalled ghost var by the amount recalled
             uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_fundedFranchiser));
             _decreaseFundedFranchiserAccountBalance(_fundedFranchiser, _amountRecalled);
+            ghost_totalRecalled += _amountRecalled;
         }
         vm.prank(_delegator);
         factory.recallMany(_delegateesForRecallMany, _targetsForRecallMany);
@@ -310,6 +324,9 @@ contract FranchiserFactoryHandler is Test {
 
         // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         _increaseFundedFranchiserAccountBalance(franchiser, _amount);
+
+        // update the total funded amount for the handler
+        ghost_totalFunded += _amount;
 
         // add the delegator and delegatee to the delegators and delegatees AddressSets for tracking totals invariants
         delegators.add(_delegator);
@@ -344,10 +361,11 @@ contract FranchiserFactoryHandler is Test {
         // add the delegator to the delegators AddressSet for tracking totals invariants
         delegators.add(_delegator);
 
-        // add the created franchisers and the delegatees to their appropriate AddressSets and update mappings for tracking totals invariants
+        // add the created franchisers to their appropriate AddressSets and update for tracking totals invariants
         delegatees.add(_delegatees);
         for (uint256 i = 0; i < lastFundedFranchisersArray.length; i++) {
             _increaseFundedFranchiserAccountBalance(lastFundedFranchisersArray[i], _amountsForFundMany[i]);
+            ghost_totalFunded += _amountsForFundMany[i];
         }
     }
 
@@ -489,8 +507,9 @@ contract FranchiserFactoryHandler is Test {
         // before the recall, get the total amount delegated by the franchiser to be recalled  (including amounts it may have sub-delegated)
         uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
-        // decrease the funded franchiser balance mapping by the amount recalled
+        // decrease the funded franchiser balance mapping and bump the total recalled ghost var by the amount recalled
         _decreaseFundedFranchiserAccountBalance(_selectedFranchiser, _amountRecalled);
+        ghost_totalRecalled += _amountRecalled;
 
         // recall the delegated funds
         vm.prank(_selectedFranchiser.owner());
