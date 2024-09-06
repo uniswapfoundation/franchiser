@@ -16,7 +16,7 @@ contract FranchiseFactoryInvariantTest is Test {
         token = new VotingTokenConcrete();
         factory = new FranchiserFactory(IVotingToken(address(token)));
         handler = new FranchiserFactoryHandler(factory);
-        bytes4[] memory selectors = new bytes4[](8);
+        bytes4[] memory selectors = new bytes4[](11);
         selectors[0] = FranchiserFactoryHandler.factory_fund.selector;
         selectors[1] = FranchiserFactoryHandler.factory_fundMany.selector;
         selectors[2] = FranchiserFactoryHandler.factory_recall.selector;
@@ -25,9 +25,9 @@ contract FranchiseFactoryInvariantTest is Test {
         selectors[5] = FranchiserFactoryHandler.factory_permitAndFundMany.selector;
         selectors[6] = FranchiserFactoryHandler.franchiser_subDelegate.selector;
         selectors[7] = FranchiserFactoryHandler.franchiser_subDelegateMany.selector;
-        // selectors[8] = FranchiserFactoryHandler.franchiser_unSubDelegate.selector;
-        // selectors[9] = FranchiserFactoryHandler.franchiser_unSubDelegateMany.selector;
-        // selectors[10] = FranchiserFactoryHandler.franchiser_recall.selector;
+        selectors[8] = FranchiserFactoryHandler.franchiser_unSubDelegate.selector;
+        selectors[9] = FranchiserFactoryHandler.franchiser_unSubDelegateMany.selector;
+        selectors[10] = FranchiserFactoryHandler.franchiser_recall.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
@@ -44,9 +44,9 @@ contract FranchiseFactoryInvariantTest is Test {
         );
     }
 
-    function invariant_updated_balances_and_voting_powers_correctly() external {
+    function invariant_Franchiser_subdelegation_totals_are_correct() external {
         handler.callSummary();
-        handler.forEachHolderAddress(this.assertHolderBalancesAndVotingPowersAreCorrect);
+        handler.forEachFundedFranchiserAddress(this.assertFundedFranchisersSubDelegationBalancesAreCorrect);
     }
 
     // Used to see distribution of non-reverting calls
@@ -54,10 +54,7 @@ contract FranchiseFactoryInvariantTest is Test {
         handler.callSummary();
     }
 
-    function assertHolderBalancesAndVotingPowersAreCorrect(address holder) external view {
-        (uint256 _balance, uint256 _votingPower) = handler.ghost_holders(holder);
-        assertEq(_balance, token.balanceOf(holder));
-        assertEq(_votingPower, token.getVotes(holder));
+    function assertFundedFranchisersSubDelegationBalancesAreCorrect(address _franchiser) external {
+        assertEq(handler.getTotalAmountDelegatedByFranchiser(_franchiser), handler.ghost_fundedFranchiserBalances(_franchiser));
     }
-
 }
