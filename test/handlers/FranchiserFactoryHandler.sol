@@ -34,7 +34,7 @@ contract FranchiserFactoryHandler is Test {
         uint256 votingPower;
     }
 
-    // Handler ghost address set and mapping to track the balance and voting power of every address that is used in the invariant tests
+    // Address set and mapping to track the balance and voting power of every holder address
     EnumerableSet.AddressSet private holderAddresses;
     mapping(address => AccountState) public ghost_holders;
 
@@ -71,7 +71,7 @@ contract FranchiserFactoryHandler is Test {
         _;
     }
 
-    // function to increase the accountBalances mapping by a given amount the  of an account
+    // function to increase the account balance mapping of an account by a given amount
     function _increaseAccountBalance(address _account, uint256 _amount) private {
         if (!holderAddresses.contains(_account)) {
             holderAddresses.add(_account);
@@ -81,7 +81,7 @@ contract FranchiserFactoryHandler is Test {
         ghost_holders[_account].balance += _amount;
     }
 
-    // function to increase the accountBalances mapping by a given amount the  of an account
+    // function to decrease the account balance mapping of an account by a given amount
     function _decreaseAccountBalance(address _account, uint256 _amount) private {
         if (!holderAddresses.contains(_account)) {
             console2.log("Account not found in holderAddresses on _decreaseAccountBalance");
@@ -89,7 +89,7 @@ contract FranchiserFactoryHandler is Test {
         ghost_holders[_account].balance -= _amount;
     }
 
-    // function to increase the accountBalances mapping by a given amount the  of an account
+    // function to increase the voting power mapping of an account by a given amount
     function _increaseAccountVotingPower(address _account, uint256 _amount) private {
         if (!holderAddresses.contains(_account)) {
             holderAddresses.add(_account);
@@ -99,7 +99,7 @@ contract FranchiserFactoryHandler is Test {
         ghost_holders[_account].votingPower += _amount;
     }
 
-    // function to increase the accountBalances mapping by a given amount the  of an account
+    // function to decrease the voting power mapping of an account by a given amount
     function _decreaseAccountVotingPower(address _account, uint256 _amount) private {
         if (!holderAddresses.contains(_account)) {
             console2.log("Account not found in holderAddresses on _decreaseAccountVotingPower");
