@@ -32,8 +32,12 @@ contract FranchiseFactoryInvariantTest is Test {
         targetContract(address(handler));
     }
 
-    function invariant_Franchiser_code_size_non_zero() external view {
+    function invariant_FranchiserFactory_fund_code_size_non_zero() external view {
         assertGt(address(handler.franchiser()).code.length, 0);
+    }
+
+    function invariant_Franchiser_subdelegate_code_size_non_zero() external view {
+        assertGt(address(handler.subDelegatedFranchiser()).code.length, 0);
     }
 
     function invariant_Franchisers_and_recalled_balance_sum_matches_total_supply() external {
