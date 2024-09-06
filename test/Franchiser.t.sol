@@ -396,7 +396,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         franchiser.recall(address(0));
     }
 
-    function testFuzz_RevertIf_FranchiserIsNotDeployedAndRecallCalled(
+    function testFuzz_RevertIf_NotCalledByDelegator(
         address _delegatee,
         address _attacker,
         address _delegator,
