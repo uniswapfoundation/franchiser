@@ -27,19 +27,14 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
 
     function setUp() public {
         votingToken = new VotingTokenConcrete();
-        franchiserImplementation = new Franchiser(
-            IVotingToken(address(votingToken))
-        );
+        franchiserImplementation = new Franchiser(IVotingToken(address(votingToken)));
         // we need to set this up as a clone to work
         franchiser = Franchiser(address(franchiserImplementation).clone());
     }
 
     function testSetUp() public {
         assertEq(franchiserImplementation.DECAY_FACTOR(), 2);
-        assertEq(
-            address(franchiserImplementation.franchiserImplementation()),
-            address(franchiserImplementation)
-        );
+        assertEq(address(franchiserImplementation.franchiserImplementation()), address(franchiserImplementation));
         assertEq(franchiserImplementation.owner(), address(0));
         assertEq(franchiserImplementation.delegator(), address(0));
         assertEq(franchiserImplementation.delegatee(), address(1));
@@ -47,10 +42,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(franchiserImplementation.subDelegatees(), new address[](0));
 
         assertEq(franchiser.DECAY_FACTOR(), 2);
-        assertEq(
-            address(franchiser.franchiserImplementation()),
-            address(franchiserImplementation)
-        );
+        assertEq(address(franchiser.franchiserImplementation()), address(franchiserImplementation));
         assertEq(franchiser.owner(), address(0));
         assertEq(franchiser.delegator(), address(0));
         assertEq(franchiser.delegatee(), address(0));
@@ -81,11 +73,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
     function testInitializeNoDelegator() public {
         vm.expectEmit(true, true, false, true, address(franchiser));
         emit Initialized(address(1), address(0), Utils.bob, 1);
-        vm.mockCall(
-            address(1),
-            abi.encodeWithSignature("delegatee()"),
-            abi.encode(address(0))
-        );
+        vm.mockCall(address(1), abi.encodeWithSignature("delegatee()"), abi.encode(address(0)));
         vm.prank(address(1));
         franchiser.initialize(Utils.bob, 1);
 
@@ -105,11 +93,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
     }
 
     function testInitializeRevertsAlreadyInitializedNoDelegator() public {
-        vm.mockCall(
-            address(1),
-            abi.encodeWithSignature("delegatee()"),
-            abi.encode(address(0))
-        );
+        vm.mockCall(address(1), abi.encodeWithSignature("delegatee()"), abi.encode(address(0)));
         vm.prank(address(1));
         franchiser.initialize(Utils.bob, 0);
         vm.expectRevert(AlreadyInitialized.selector);
@@ -120,22 +104,14 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
 
     function testSubDelegateRevertsNotDelegatee() public {
         franchiser.initialize(Utils.alice, Utils.bob, 0);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDelegatee.selector,
-                Utils.alice,
-                Utils.bob
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(NotDelegatee.selector, Utils.alice, Utils.bob));
         vm.prank(Utils.alice);
         franchiser.subDelegate(address(1), 0);
     }
 
     function testSubDelegateRevertsCannotExceedMaximumSubDelegatees() public {
         franchiser.initialize(Utils.alice, Utils.bob, 0);
-        vm.expectRevert(
-            abi.encodeWithSelector(CannotExceedMaximumSubDelegatees.selector, 0)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CannotExceedMaximumSubDelegatees.selector, 0));
         vm.prank(Utils.bob);
         franchiser.subDelegate(address(1), 0);
     }
@@ -163,10 +139,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         assertEq(returnedFranchiser.delegatee(), Utils.carol);
         assertEq(returnedFranchiser.maximumSubDelegatees(), 0);
         assertEq(returnedFranchiser.subDelegatees(), new address[](0));
-        assertEq(
-            votingToken.delegates(address(returnedFranchiser)),
-            Utils.carol
-        );
+        assertEq(votingToken.delegates(address(returnedFranchiser)), Utils.carol);
     }
 
     function testSubDelegateZeroNested() public {
@@ -193,10 +166,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         franchiser.initialize(Utils.alice, Utils.bob, 1);
         votingToken.mint(address(franchiser), 100);
         vm.prank(Utils.bob);
-        Franchiser returnedFranchiser = franchiser.subDelegate(
-            Utils.carol,
-            100
-        );
+        Franchiser returnedFranchiser = franchiser.subDelegate(Utils.carol, 100);
 
         assertEq(votingToken.balanceOf(address(returnedFranchiser)), 100);
     }
@@ -265,9 +235,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         address[] memory subDelegatees = new address[](0);
         uint256[] memory amounts = new uint256[](1);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1));
         vm.prank(Utils.bob);
         franchiser.subDelegateMany(subDelegatees, amounts);
     }
@@ -282,10 +250,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         uint256[] memory amounts = new uint256[](2);
 
         vm.prank(Utils.bob);
-        Franchiser[] memory franchisers = franchiser.subDelegateMany(
-            subDelegatees,
-            amounts
-        );
+        Franchiser[] memory franchisers = franchiser.subDelegateMany(subDelegatees, amounts);
         assertEq(franchisers.length, 2);
     }
 
@@ -293,14 +258,20 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         franchiser.initialize(Utils.alice, Utils.bob, 1);
         vm.prank(Utils.bob);
         franchiser.subDelegate(Utils.carol, 0);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDelegatee.selector,
-                Utils.alice,
-                Utils.bob
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(NotDelegatee.selector, Utils.alice, Utils.bob));
         vm.prank(Utils.alice);
+        franchiser.unSubDelegate(Utils.carol);
+    }
+
+    function testFuzz_RevertIf_DelegateeIsNotCaller(address _delegator, address _delegatee, address _caller) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_validActorAddress(_delegatee));
+        vm.assume(_caller != _delegator);
+        franchiser.initialize(_delegator, _delegatee, 1);
+        vm.prank(_delegatee);
+        franchiser.subDelegate(Utils.carol, 0);
+        vm.expectRevert(abi.encodeWithSelector(NotDelegatee.selector, _caller, _delegatee));
+        vm.prank(_caller);
         franchiser.unSubDelegate(Utils.carol);
     }
 
@@ -391,21 +362,61 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
         franchiser.subDelegate(Utils.carol, 0);
         franchiser.subDelegate(Utils.dave, 0);
         vm.stopPrank();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDelegatee.selector,
-                Utils.alice,
-                Utils.bob
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(NotDelegatee.selector, Utils.alice, Utils.bob));
         vm.prank(Utils.alice);
         franchiser.unSubDelegateMany(subDelegatees);
+    }
+
+    // max subdelegate
+    function testFuzz_RevertIf_SubDelegateIsBeyondMax(
+        address _delegator,
+        address _delegatee,
+        address _subDelegatee2,
+        address _subDelegatee1
+    ) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_validActorAddress(_delegatee));
+        vm.assume(_validActorAddress(_subDelegatee1));
+        vm.assume(_validActorAddress(_subDelegatee2));
+        vm.assume(_subDelegatee1 != _subDelegatee2);
+
+        vm.prank(_delegator);
+        franchiser.initialize(_delegator, _delegatee, 1);
+
+        vm.startPrank(_delegatee);
+        franchiser.subDelegate(_subDelegatee1, 0);
+        vm.expectRevert(abi.encodeWithSelector(CannotExceedMaximumSubDelegatees.selector, 1));
+        franchiser.subDelegate(_subDelegatee2, 0);
+        vm.stopPrank();
     }
 
     function testRecallRevertsUNAUTHORIZED() public {
         vm.expectRevert(bytes("UNAUTHORIZED"));
         vm.prank(address(1));
         franchiser.recall(address(0));
+    }
+
+    function testFuzz_RevertIf_NotCalledByDelegator(
+        address _delegatee,
+        address _attacker,
+        address _delegator,
+        uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_delegatee));
+        vm.assume(_validActorAddress(_attacker));
+        vm.assume(_validActorAddress(_delegator));
+        _amount = bound(_amount, 4, 100_000_000e18);
+        votingToken.mint(_delegator, _amount);
+
+        vm.prank(_delegator);
+        franchiser = Franchiser(address(franchiserImplementation).clone());
+
+        vm.prank(_delegator);
+        franchiser.initialize(_delegator, _delegatee, 2);
+
+        vm.prank(_attacker);
+        vm.expectRevert(bytes("UNAUTHORIZED"));
+        franchiser.recall(_attacker);
     }
 
     function testRecallZeroNoSubDelegatees() public {
