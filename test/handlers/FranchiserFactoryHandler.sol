@@ -67,18 +67,12 @@ contract FranchiserFactoryHandler is Test {
     // function to increase the account balance mapping of top-level funded franchiser account by a given amount
     function _increaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private {
         address _address = address(_franchiser);
-        if (!fundedFranchisers.contains(_address)) {
-            fundedFranchisers.add(_address);
-        }
+        fundedFranchisers.add(_address);
         ghost_fundedFranchiserBalances[_address] += _amount;
     }
 
     // function to decrease the funded franchiser balance mapping of an account by a given amount
     function _decreaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private {
-        // from the given franchiser, find the top-level franchiser that was orignally funded and is in the fundedFranchisers AddressSet
-        while (_franchiser.owner() != address(factory))
-            _franchiser = Franchiser(franchiser.owner());
-
         address _address = address(_franchiser);
         if (!fundedFranchisers.contains(_address)) {
             console2.log("Funded franchiser address not not found in fundedFranchisers on _decreaseFundedFranchiserAccountBalance");
@@ -167,7 +161,7 @@ contract FranchiserFactoryHandler is Test {
 
     function _selectFranchiser(
         uint256 _franchiserIndex,
-        bool _chooseSubDelegatedFranchiser // 50% of the time we should selected from sub-delegated franchisers when available
+        bool _chooseSubDelegatedFranchiser // 50% of the time we should select from sub-delegated franchisers when available
     ) internal view returns (Franchiser _selectedFranchiser) {
         if (fundedFranchisers.length() == 0) {
             return Franchiser(address(0));
