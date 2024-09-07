@@ -15,6 +15,7 @@ contract FranchiserFactoryHandler is Test {
 
     FranchiserFactory public factory;
     Franchiser public franchiser;
+    Franchiser public subDelegatedFranchiser;
     VotingTokenConcrete public votingToken;
 
     // Struct for tracking the number of calls to each handler function
@@ -51,6 +52,7 @@ contract FranchiserFactoryHandler is Test {
         factory = _factory;
         votingToken = VotingTokenConcrete(address(factory.votingToken()));
         franchiser = new Franchiser(IVotingToken(address(votingToken)));
+        subDelegatedFranchiser = new Franchiser(IVotingToken(address(votingToken)));
     }
 
     modifier countCall(bytes32 key) {
@@ -370,11 +372,11 @@ contract FranchiserFactoryHandler is Test {
         _subDelegateAmountFraction = bound(_subDelegateAmountFraction, 1, _franchiserBalanceBefore);
         uint256 _subDelegateAmount = _franchiserBalanceBefore / _subDelegateAmountFraction;
         vm.prank(_delegatee);
-        Franchiser _subDelegatedFranchiser = _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
+        subDelegatedFranchiser = _selectedFranchiser.subDelegate(_subDelegatee, _subDelegateAmount);
 
         // add the subDelegated franchiser to the subDelegatedFranchisers AddressSet so it can be found
         // for use in future subDelegations, prefering subdelegatees for tree creation
-        subDelegatedFranchisers.add(address(_subDelegatedFranchiser));
+        subDelegatedFranchisers.add(address(subDelegatedFranchiser));
 
         // add the subDelegatee to the delegatees AddressSet for tracking totals invariants
         delegatees.add(_subDelegatee);
