@@ -8,6 +8,10 @@ via_ir = true
 optimizer_runs = 1000000
 bytecode_hash = "none"
 
+[profile.ci]
+  fuzz = { runs = 5000 }
+  invariant = { runs = 1000 }
+
 [invariant]
   call_override = false
   depth = 100
