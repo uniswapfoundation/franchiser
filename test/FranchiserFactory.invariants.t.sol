@@ -48,6 +48,14 @@ contract FranchiseFactoryInvariantTest is Test {
         );
     }
 
+    function invariant_Total_funded_less_total_recalled_matches_franchisers_totals() external {
+        handler.callSummary();
+        assertEq(
+            handler.ghost_totalFunded() - handler.ghost_totalRecalled(),
+            handler.sumFundedFranchisersBalances()
+        );
+    }
+
     function invariant_Franchiser_subdelegation_totals_are_correct() external {
         handler.callSummary();
         handler.forEachFundedFranchiserAddress(this.assertFundedFranchisersSubDelegationBalancesAreCorrect);
