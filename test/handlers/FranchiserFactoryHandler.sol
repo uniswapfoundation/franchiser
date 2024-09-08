@@ -73,9 +73,14 @@ contract FranchiserFactoryHandler is Test {
 
     // function to decrease the funded franchiser balance mapping of an account by a given amount
     function _decreaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private {
+        // from the given franchiser, find the top-level franchiser that was orignally funded and is in the fundedFranchisers AddressSet
+        while (_franchiser.owner() != address(factory))
+            _franchiser = Franchiser(franchiser.owner());
+
         address _address = address(_franchiser);
         if (!fundedFranchisers.contains(_address)) {
             console2.log("Funded franchiser address not not found in fundedFranchisers on _decreaseFundedFranchiserAccountBalance");
+            return;
         }
         ghost_fundedFranchiserBalances[_address] -= _amount;
     }
