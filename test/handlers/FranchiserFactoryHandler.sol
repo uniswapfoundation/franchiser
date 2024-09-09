@@ -75,7 +75,7 @@ contract FranchiserFactoryHandler is Test {
     function _decreaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private {
         // from the given franchiser, find the top-level franchiser that was orignally funded and is in the fundedFranchisers AddressSet
         while (_franchiser.owner() != address(factory))
-            _franchiser = Franchiser(franchiser.owner());
+            _franchiser = Franchiser(_franchiser.owner());
 
         address _address = address(_franchiser);
         if (!fundedFranchisers.contains(_address)) {
