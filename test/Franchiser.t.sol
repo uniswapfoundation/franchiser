@@ -266,7 +266,7 @@ contract FranchiserTest is Test, IFranchiserErrors, IFranchiserEvents {
     function testFuzz_RevertIf_DelegateeIsNotCaller(address _delegator, address _delegatee, address _caller) public {
         vm.assume(_validActorAddress(_delegator));
         vm.assume(_validActorAddress(_delegatee));
-        vm.assume(_caller != _delegator);
+        vm.assume(_caller != _delegatee);
         franchiser.initialize(_delegator, _delegatee, 1);
         vm.prank(_delegatee);
         franchiser.subDelegate(Utils.carol, 0);
