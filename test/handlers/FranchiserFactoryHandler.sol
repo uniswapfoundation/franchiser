@@ -72,12 +72,19 @@ contract FranchiserFactoryHandler is Test {
     }
 
     // function to decrease the funded franchiser balance mapping of an account by a given amount
-    function _decreaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private {
+    function _decreaseFundedFranchiserAccountBalance(Franchiser _franchiser, uint256 _amount) private returns (Franchiser) {
+        // from the given franchiser, find the top-level franchiser that was orignally funded and is in the fundedFranchisers AddressSet
+        while (_franchiser.owner() != address(factory)) {
+            _franchiser = Franchiser(_franchiser.owner());
+        }
+
         address _address = address(_franchiser);
         if (!fundedFranchisers.contains(_address)) {
             console2.log("Funded franchiser address not not found in fundedFranchisers on _decreaseFundedFranchiserAccountBalance");
+            return _franchiser;
         }
         ghost_fundedFranchiserBalances[_address] -= _amount;
+        return _franchiser;
     }
 
     function _validActorAddress(address _address) internal view returns (bool valid) {
@@ -498,16 +505,17 @@ contract FranchiserFactoryHandler is Test {
             return;
         }
         Franchiser _selectedFranchiser = _selectFranchiser(_franchiserIndex, _useSubDelegateFranchisers);
-        address _delegator = _selectedFranchiser.delegator();
 
         // before the recall, get the total amount delegated by the franchiser to be recalled  (including amounts it may have sub-delegated)
         uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
 
         // decrease the funded franchiser balance mapping and bump the total recalled ghost var by the amount recalled
-        _decreaseFundedFranchiserAccountBalance(_selectedFranchiser, _amountRecalled);
+        Franchiser _fundedFranchiser = _decreaseFundedFranchiserAccountBalance(_selectedFranchiser, _amountRecalled);
         ghost_totalRecalled += _amountRecalled;
 
+
         // recall the delegated funds
+        address _delegator = _fundedFranchiser.delegator();
         vm.prank(_selectedFranchiser.owner());
         _selectedFranchiser.recall(_delegator);
     }
