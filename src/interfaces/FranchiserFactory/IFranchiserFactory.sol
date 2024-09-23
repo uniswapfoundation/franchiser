@@ -85,7 +85,7 @@ interface IFranchiserFactory is
         bytes32 s
     ) external returns (Franchiser franchiser);
 
-    /// @notice Calls permitAndFund many times.
+    /// @notice Calls fund many times after calling permit for total of given amounts.
     /// @dev The permit must be for the sum of `amounts`.
     /// @param delegatees The target `delegatees`.
     /// @param amounts The amounts of `votingToken` to allocate.
