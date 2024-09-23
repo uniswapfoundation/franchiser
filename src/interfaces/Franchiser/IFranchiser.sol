@@ -80,8 +80,8 @@ interface IFranchiser is IFranchiserErrors, IFranchiserEvents {
     ) external returns (Franchiser[] memory franchisers);
 
     /// @notice Delegates `amount` of `votingToken` to `subDelegatee`.
-    /// @dev Can only be called by the `delegatee`. The Franchiser associated
-    ///      with the `subDelegatee` must not already be active.
+    /// @dev Can only be called by the `delegatee`. If the Franchiser associated
+    ///      with the `subDelegatee` is already active, it will receive the sub-delegation.
     /// @param subDelegatee The address that will receive voting power.
     /// @param amount The amount of voting power.
     /// @return franchiser The Franchiser contract.
