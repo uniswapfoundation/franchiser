@@ -21,7 +21,8 @@ library Utils {
         uint256 levels,
         Vm vm,
         VotingTokenConcrete votingToken,
-        FranchiserFactory franchiserFactory
+        FranchiserFactory franchiserFactory,
+        uint256 expiration
     ) internal returns (Franchiser[5] memory franchisers) {
         assert(levels != 0);
         assert(levels <= 5);
@@ -35,7 +36,7 @@ library Utils {
         votingToken.mint(alice, 1);
         vm.startPrank(alice);
         votingToken.approve(address(franchiserFactory), 1);
-        franchisers[0] = franchiserFactory.fund(delegatees[0], 1);
+        franchisers[0] = franchiserFactory.fund(delegatees[0], 1, expiration);
         vm.stopPrank();
 
         unchecked {
@@ -60,7 +61,8 @@ library Utils {
     function nestMaximum(
         Vm vm,
         VotingTokenConcrete votingToken,
-        FranchiserFactory franchiserFactory
+        FranchiserFactory franchiserFactory,
+        uint256 expiration
     ) internal returns (Franchiser[][5] memory franchisers) {
         assert(franchiserFactory.INITIAL_MAXIMUM_SUBDELEGATEES() == 8);
         assert(
@@ -78,7 +80,7 @@ library Utils {
         votingToken.mint(address(1), 64);
         vm.startPrank(address(1));
         votingToken.approve(address(franchiserFactory), 64);
-        franchisers[0][0] = franchiserFactory.fund(nextDelegatee, 64);
+        franchisers[0][0] = franchiserFactory.fund(nextDelegatee, 64, expiration);
         vm.stopPrank();
 
         nextDelegatee = incrementNextDelegatee(nextDelegatee);

@@ -13,6 +13,8 @@ contract FranchiserFactoryHandler is Test {
     using EnumerableSet for EnumerableSet.AddressSet;
     using Address for address;
 
+    uint safeFutureExpiration = block.timestamp + 1 weeks;
+
     FranchiserFactory public factory;
     Franchiser public franchiser;
     Franchiser public subDelegatedFranchiser;
@@ -207,7 +209,7 @@ contract FranchiserFactoryHandler is Test {
         votingToken.mint(_delegator, _amount);
         vm.startPrank(_delegator);
         votingToken.approve(address(factory), _amount);
-        franchiser = factory.fund(_delegatee, _amount);
+        franchiser = factory.fund(_delegatee, _amount, safeFutureExpiration);
         vm.stopPrank();
 
         // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
@@ -244,7 +246,7 @@ contract FranchiserFactoryHandler is Test {
 
         // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
         delete lastFundedFranchisersArray;
-        lastFundedFranchisersArray = factory.fundMany(_delegatees, _amountsForFundMany);
+        lastFundedFranchisersArray = factory.fundMany(_delegatees, _amountsForFundMany, safeFutureExpiration);
         vm.stopPrank();
 
         // add the delegator to the delegators AddressSets for tracking totals invariants
@@ -323,7 +325,7 @@ contract FranchiserFactoryHandler is Test {
         votingToken.mint(_delegator, _amount);
 
         vm.prank(_delegator);
-        franchiser = factory.permitAndFund(_delegatee, _amount, _deadline, _v, _r, _s);
+        franchiser = factory.permitAndFund(_delegatee, _amount, _deadline, safeFutureExpiration, _v, _r, _s);
 
         // add the created franchiser to the fundedFranchisers AddressSet for tracking totals invariants
         _increaseFundedFranchiserAccountBalance(franchiser, _amount);
@@ -358,7 +360,7 @@ contract FranchiserFactoryHandler is Test {
 
         // clear the storage of the lastFundedFranchisersArray and create a new one with call to fundMany
         delete lastFundedFranchisersArray;
-        lastFundedFranchisersArray = factory.permitAndFundMany(_delegatees, _amountsForFundMany, _deadline, _v, _r, _s);
+        lastFundedFranchisersArray = factory.permitAndFundMany(_delegatees, _amountsForFundMany, _deadline, safeFutureExpiration, _v, _r, _s);
         vm.stopPrank();
 
         // add the delegator to the delegators AddressSet for tracking totals invariants

@@ -15,6 +15,8 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
     VotingTokenConcrete private votingToken;
     FranchiserFactory private franchiserFactory;
 
+    uint safeFutureExpiration = block.timestamp + 1 weeks;
+
     function setUp() public {
         votingToken = new VotingTokenConcrete();
         franchiserFactory = new FranchiserFactory(IVotingToken(address(votingToken)));
@@ -47,24 +49,25 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.expectEmit(true, true, true, true, address(expectedFranchiser));
         emit Initialized(address(franchiserFactory), Utils.alice, Utils.bob, 8);
         vm.prank(Utils.alice);
-        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 0);
+        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 0, safeFutureExpiration);
 
         assertEq(address(expectedFranchiser), address(franchiser));
         assertEq(franchiser.owner(), address(franchiserFactory));
         assertEq(franchiser.delegatee(), Utils.bob);
         assertEq(votingToken.delegates(address(franchiser)), Utils.bob);
+        assertEq(franchiserFactory.expirations(franchiser), safeFutureExpiration);
     }
 
     function testFundCanCallTwice() public {
         vm.startPrank(Utils.alice);
-        franchiserFactory.fund(Utils.bob, 0);
-        franchiserFactory.fund(Utils.bob, 0);
+        franchiserFactory.fund(Utils.bob, 0, safeFutureExpiration);
+        franchiserFactory.fund(Utils.bob, 0, safeFutureExpiration);
         vm.stopPrank();
     }
 
     function testFundNonZeroRevertsTRANSFER_FROM_FAILED() public {
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
-        franchiserFactory.fund(Utils.bob, 100);
+        franchiserFactory.fund(Utils.bob, 100, safeFutureExpiration);
     }
 
     function testFundNonZero() public {
@@ -72,19 +75,21 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(Utils.alice);
         votingToken.approve(address(franchiserFactory), 100);
-        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 100);
+        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 100, safeFutureExpiration);
         vm.stopPrank();
 
         assertEq(votingToken.balanceOf(address(franchiser)), 100);
         assertEq(votingToken.getVotes(Utils.bob), 100);
+        assertEq(franchiserFactory.expirations(franchiser), safeFutureExpiration);
     }
 
-    function testFuzz_FundBalancesAndVotingPowerUpdated(address _delegator, address _delegatee, uint256 _amount)
+    function testFuzz_FundBalances_VotingPower_ExpirationUpdated(address _delegator, address _delegatee, uint256 _amount, uint256 _expiration)
         public
     {
         vm.assume(_validActorAddress(_delegator));
         vm.assume(_delegatee != address(0));
         _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp, type(uint).max);
         Franchiser expectedFranchiser = franchiserFactory.getFranchiser(_delegator, _delegatee);
         uint256 _delegateeVotesBefore = votingToken.getVotes(_delegatee);
         uint256 _franchiserBalanceBefore = votingToken.balanceOf(address(expectedFranchiser));
@@ -94,12 +99,65 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(_delegator);
         votingToken.approve(address(franchiserFactory), _amount);
-        Franchiser franchiser = franchiserFactory.fund(_delegatee, _amount);
+        Franchiser franchiser = franchiserFactory.fund(_delegatee, _amount, _expiration);
         vm.stopPrank();
 
         assertEq(votingToken.balanceOf(address(franchiser)), _franchiserBalanceBefore + _amount);
         assertEq(votingToken.getVotes(_delegatee), _delegateeVotesBefore + _amount);
         assertEq(votingToken.balanceOf(_delegator), _delegatorBalanceBefore - _amount);
+        assertEq(franchiserFactory.expirations(franchiser), _expiration);
+    }
+
+    function testFuzz_Fund_OverwritesExpiration_BeforeExpiry(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, uint256 _warpTime, uint256 _newExpiration) public {
+        vm.assume(_validActorAddress(_owner));
+        vm.assume(_delegatee != address(0));
+
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp + 1 days, type(uint).max);
+        _warpTime = bound(_warpTime, block.timestamp, _expiration - 1);
+        _newExpiration = bound(_newExpiration, _warpTime, type(uint).max);
+
+        votingToken.mint(_owner, _amount);
+
+        vm.startPrank(_owner);
+        votingToken.approve(address(franchiserFactory), _amount);
+        Franchiser franchiser = franchiserFactory.fund(_delegatee, _amount, _expiration);
+        assertEq(_expiration, franchiserFactory.expirations(franchiser));
+
+        vm.warp(_warpTime);
+        votingToken.mint(_owner, _amount);
+
+        votingToken.approve(address(franchiserFactory), _amount);
+        Franchiser newFranchiser = franchiserFactory.fund(_delegatee, _amount, _newExpiration);
+        assertEq(address(newFranchiser), address(franchiser));
+        assertEq(_newExpiration, franchiserFactory.expirations(newFranchiser));
+        vm.stopPrank();
+    }
+
+    function testFuzz_Fund_OverwritesExpiration_AfterExpiry(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, uint256 _warpTime, uint256 _newExpiration) public {
+        vm.assume(_validActorAddress(_owner));
+        vm.assume(_delegatee != address(0));
+
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp + 1 days, type(uint).max);
+        _warpTime = bound(_warpTime, _expiration, type(uint).max);
+        _newExpiration = bound(_newExpiration, _warpTime, type(uint).max);
+
+        votingToken.mint(_owner, _amount);
+
+        vm.startPrank(_owner);
+        votingToken.approve(address(franchiserFactory), _amount);
+        Franchiser franchiser = franchiserFactory.fund(_delegatee, _amount, _expiration);
+        assertEq(_expiration, franchiserFactory.expirations(franchiser));
+
+        vm.warp(_warpTime);
+        votingToken.mint(_owner, _amount);
+
+        votingToken.approve(address(franchiserFactory), _amount);
+        Franchiser newFranchiser = franchiserFactory.fund(_delegatee, _amount, _newExpiration);
+        assertEq(address(newFranchiser), address(franchiser));
+        assertEq(_newExpiration, franchiserFactory.expirations(newFranchiser));
+        vm.stopPrank();
     }
 
     function testFuzz_FundFailsWhenDelegateeIsAddressZero(address _delegator, uint256 _amount) public {
@@ -112,7 +170,7 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.startPrank(_delegator);
         votingToken.approve(address(franchiserFactory), _amount);
         vm.expectRevert(IFranchiserErrors.NoDelegatee.selector);
-        franchiserFactory.fund(_delegatee, _amount);
+        franchiserFactory.fund(_delegatee, _amount, safeFutureExpiration);
         vm.stopPrank();
     }
 
@@ -130,16 +188,30 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.startPrank(_delegator);
         votingToken.approve(address(franchiserFactory), _amount);
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
-        franchiserFactory.fund(_delegatee, _amount);
+        franchiserFactory.fund(_delegatee, _amount, safeFutureExpiration);
+        vm.stopPrank();
+    }
+
+    function testFuzz_RevertIf_ExpirationLessThanBlockTimestamp(address _delegator, address _delegatee, uint256 _amount, uint256 _expiration) public {
+        vm.assume(_validActorAddress(_delegator));
+        vm.assume(_delegatee != address(0));
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, 0, block.timestamp - 1);
+        votingToken.mint(_delegator, _amount);
+
+        vm.startPrank(_delegator);
+        votingToken.approve(address(franchiserFactory), _amount);
+        vm.expectRevert(IFranchiserFactoryErrors.InvalidExpiration.selector);
+        franchiserFactory.fund(_delegatee, _amount, _expiration);
         vm.stopPrank();
     }
 
     function testFundManyRevertsArrayLengthMismatch() public {
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1));
-        franchiserFactory.fundMany(new address[](0), new uint256[](1));
+        franchiserFactory.fundMany(new address[](0), new uint256[](1), safeFutureExpiration);
 
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 1, 0));
-        franchiserFactory.fundMany(new address[](1), new uint256[](0));
+        franchiserFactory.fundMany(new address[](1), new uint256[](0), safeFutureExpiration);
     }
 
     function testFundMany() public {
@@ -155,11 +227,13 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(Utils.alice);
         votingToken.approve(address(franchiserFactory), 100);
-        Franchiser[] memory franchisers = franchiserFactory.fundMany(delegatees, amounts);
+        Franchiser[] memory franchisers = franchiserFactory.fundMany(delegatees, amounts, safeFutureExpiration);
         vm.stopPrank();
 
         assertEq(votingToken.balanceOf(address(franchisers[0])), 50);
         assertEq(votingToken.balanceOf(address(franchisers[1])), 50);
+        assertEq(franchiserFactory.expirations(franchisers[0]), safeFutureExpiration);
+        assertEq(franchiserFactory.expirations(franchisers[1]), safeFutureExpiration);
     }
 
     function testRecallZero() public {
@@ -171,13 +245,14 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(Utils.alice);
         votingToken.approve(address(franchiserFactory), 100);
-        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 100);
+        Franchiser franchiser = franchiserFactory.fund(Utils.bob, 100, safeFutureExpiration);
         franchiserFactory.recall(Utils.bob, Utils.alice);
         vm.stopPrank();
 
         assertEq(votingToken.balanceOf(address(franchiser)), 0);
         assertEq(votingToken.balanceOf(Utils.alice), 100);
         assertEq(votingToken.getVotes(Utils.bob), 0);
+        assertEq(franchiserFactory.expirations(franchiser), safeFutureExpiration);
     }
 
     function testFuzz_RecallDelegatorBalanceUpdated(address _delegator, address _delegatee, uint256 _amount) public {
@@ -189,7 +264,7 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(_delegator);
         votingToken.approve(address(franchiserFactory), _amount);
-        franchiserFactory.fund(_delegatee, _amount);
+        franchiserFactory.fund(_delegatee, _amount, safeFutureExpiration);
 
         uint256 _delegatorBalanceBeforeRecall = votingToken.balanceOf(_delegator);
         franchiserFactory.recall(_delegatee, _delegator);
@@ -219,8 +294,8 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.startPrank(Utils.alice);
         votingToken.approve(address(franchiserFactory), 100);
-        franchiserFactory.fund(Utils.bob, 50);
-        franchiserFactory.fund(Utils.carol, 50);
+        franchiserFactory.fund(Utils.bob, 50, safeFutureExpiration);
+        franchiserFactory.fund(Utils.carol, 50, safeFutureExpiration);
         franchiserFactory.recallMany(delegatees, tos);
         vm.stopPrank();
 
@@ -228,7 +303,7 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
     }
 
     function testRecallGasWorstCase() public {
-        Utils.nestMaximum(vm, votingToken, franchiserFactory);
+        Utils.nestMaximum(vm, votingToken, franchiserFactory, safeFutureExpiration);
         vm.prank(address(1));
         uint256 gasBefore = gasleft();
         franchiserFactory.recall(address(2), address(1));
@@ -241,23 +316,108 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         assertEq(votingToken.balanceOf(address(1)), 64);
     }
 
+    function testFuzz_ExpiredRecall_Owner_BalanceUpdated(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _expiredRecallCaller, uint _recallTimestamp) public {
+        vm.assume(_validActorAddress(_owner));
+        vm.assume(_delegatee != address(0));
+
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp, type(uint).max);
+        _recallTimestamp = bound(_recallTimestamp, _expiration, type(uint).max);
+
+        votingToken.mint(_owner, _amount);
+
+        vm.startPrank(_owner);
+        votingToken.approve(address(franchiserFactory), _amount);
+        franchiserFactory.fund(_delegatee, _amount, _expiration);
+        vm.stopPrank();
+        vm.warp(_recallTimestamp);
+        uint256 _ownerBalanceBeforeRecall = votingToken.balanceOf(_owner);
+
+        vm.prank(_expiredRecallCaller);
+        franchiserFactory.expiredRecall(_owner, _delegatee);
+
+        assertEq(votingToken.balanceOf(_owner), _ownerBalanceBeforeRecall + _amount);
+    }
+
+    function testFuzz_ExpiredRecall_NestedSubDelegatees_BalancesUpdated(address _owner, address _delegatee, address _subDelegatee1, address _subDelegatee2, uint256 _expiration, uint256 _recallTimestamp, address _expiredRecallCaller, uint256 _amount
+    ) public {
+        vm.assume(_validActorAddress(_owner));
+        vm.assume(_validActorAddress(_delegatee));
+        vm.assume(_validActorAddress(_subDelegatee1));
+        vm.assume(_subDelegatee2 != address(0));
+
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp, type(uint).max);
+        _recallTimestamp = bound(_recallTimestamp, _expiration, type(uint).max);
+
+        votingToken.mint(_owner, _amount);
+
+        vm.startPrank(_owner);
+        votingToken.approve(address(franchiserFactory), _amount);
+        Franchiser franchiser = franchiserFactory.fund(_delegatee, _amount, _expiration);
+        vm.stopPrank();
+
+        // sub-delegate one-fourth of the amount to each sub-delegatee
+        vm.prank(_delegatee);
+        Franchiser _subFranchiser1 = franchiser.subDelegate(_subDelegatee1, _amount / 4);
+        assertEq(votingToken.balanceOf(address(franchiser)), _amount  - _amount / 4);
+        assertEq(votingToken.balanceOf(address(_subFranchiser1)), _amount / 4);
+
+        vm.prank(_subDelegatee1);
+        Franchiser _subFranchiser2 = _subFranchiser1.subDelegate(_subDelegatee2, _amount / 4);
+        assertEq(votingToken.balanceOf(address(_subFranchiser1)), 0);
+        assertEq(votingToken.balanceOf(address(_subFranchiser2)), _amount / 4);
+
+        vm.warp(_recallTimestamp);
+
+        vm.prank(_expiredRecallCaller);
+        franchiserFactory.expiredRecall(_owner, _delegatee);
+        assertEq(votingToken.balanceOf(address(franchiser)), 0);
+        assertEq(votingToken.balanceOf(address(_subFranchiser1)), 0);
+        assertEq(votingToken.balanceOf(address(_subFranchiser2)), 0);
+        assertEq(votingToken.balanceOf(_owner), _amount);
+    }
+
+    function testFuzz_RevertIf_ExpiredRecall_CalledBeforeExpiration(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _expiredRecallCaller, uint _recallTimestamp) public {
+        vm.assume(_validActorAddress(_owner));
+        vm.assume(_delegatee != address(0));
+
+        _amount = _boundAmount(_amount);
+        _expiration = bound(_expiration, block.timestamp + 1 hours, type(uint).max);
+        _recallTimestamp = bound(_recallTimestamp, block.timestamp, _expiration - 1);
+
+        votingToken.mint(_owner, _amount);
+
+        vm.startPrank(_owner);
+        votingToken.approve(address(franchiserFactory), _amount);
+        franchiserFactory.fund(_delegatee, _amount, _expiration);
+        vm.stopPrank();
+
+        vm.warp(_recallTimestamp);
+
+        vm.prank(_expiredRecallCaller);
+        vm.expectRevert(abi.encodeWithSelector(DelegateeNotExpired.selector));
+        franchiserFactory.expiredRecall(_owner, _delegatee);
+    }
+
     function testPermitAndFund() public {
         (address owner, uint256 deadline, uint8 v, bytes32 r, bytes32 s) =
             votingToken.getPermitSignature(vm, 0xa11ce, address(franchiserFactory), 100);
         votingToken.mint(owner, 100);
         vm.prank(owner);
-        Franchiser franchiser = franchiserFactory.permitAndFund(Utils.bob, 100, deadline, v, r, s);
+        Franchiser franchiser = franchiserFactory.permitAndFund(Utils.bob, 100, deadline, safeFutureExpiration, v, r, s);
 
         assertEq(votingToken.balanceOf(address(franchiser)), 100);
         assertEq(votingToken.getVotes(Utils.bob), 100);
-    }
+        assertEq(franchiserFactory.expirations(franchiser), safeFutureExpiration);
+        }
 
     function testPermitAndFundManyRevertsArrayLengthMismatch() public {
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 0, 1));
-        franchiserFactory.permitAndFundMany(new address[](0), new uint256[](1), 0, 0, 0, 0);
+        franchiserFactory.permitAndFundMany(new address[](0), new uint256[](1), 0, safeFutureExpiration, 0, 0, 0);
 
         vm.expectRevert(abi.encodeWithSelector(ArrayLengthMismatch.selector, 1, 0));
-        franchiserFactory.permitAndFundMany(new address[](1), new uint256[](0), 0, 0, 0, 0);
+        franchiserFactory.permitAndFundMany(new address[](1), new uint256[](0), 0, safeFutureExpiration, 0, 0, 0);
     }
 
     // fails because of overflow
@@ -266,7 +426,7 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         amounts[0] = type(uint256).max;
         amounts[1] = 1;
 
-        franchiserFactory.permitAndFundMany(new address[](2), amounts, 0, 0, 0, 0);
+        franchiserFactory.permitAndFundMany(new address[](2), amounts, 0, safeFutureExpiration, 0, 0, 0);
     }
 
     function testPermitAndFundMany() public {
@@ -283,9 +443,11 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         amounts[1] = 50;
 
         vm.prank(owner);
-        Franchiser[] memory franchisers = franchiserFactory.permitAndFundMany(delegatees, amounts, deadline, v, r, s);
+        Franchiser[] memory franchisers = franchiserFactory.permitAndFundMany(delegatees, amounts, deadline, safeFutureExpiration, v, r, s);
 
         assertEq(votingToken.balanceOf(address(franchisers[0])), 50);
         assertEq(votingToken.balanceOf(address(franchisers[1])), 50);
+        assertEq(franchiserFactory.expirations(franchisers[0]), safeFutureExpiration);
+        assertEq(franchiserFactory.expirations(franchisers[1]), safeFutureExpiration);
     }
 }

@@ -15,6 +15,8 @@ contract FranchiserLensTest is Test {
     FranchiserFactory private franchiserFactory;
     FranchiserLens private franchiserLens;
 
+    uint safeFutureExpiration = block.timestamp + 1 weeks;
+
     function setUp() public {
         votingToken = new VotingTokenConcrete();
         franchiserFactory = new FranchiserFactory(
@@ -38,7 +40,8 @@ contract FranchiserLensTest is Test {
             1,
             vm,
             votingToken,
-            franchiserFactory
+            franchiserFactory,
+            safeFutureExpiration
         );
 
         IFranchiserLens.Delegation memory rootDelegation = franchiserLens
@@ -66,7 +69,8 @@ contract FranchiserLensTest is Test {
             2,
             vm,
             votingToken,
-            franchiserFactory
+            franchiserFactory,
+            safeFutureExpiration
         );
 
         IFranchiserLens.Delegation memory rootDelegation = franchiserLens
@@ -106,7 +110,8 @@ contract FranchiserLensTest is Test {
             5,
             vm,
             votingToken,
-            franchiserFactory
+            franchiserFactory,
+            safeFutureExpiration
         );
 
         IFranchiserLens.Delegation memory rootDelegation = franchiserLens
@@ -171,7 +176,8 @@ contract FranchiserLensTest is Test {
         Franchiser[][5] memory franchisers = Utils.nestMaximum(
             vm,
             votingToken,
-            franchiserFactory
+            franchiserFactory,
+            safeFutureExpiration
         );
 
         IFranchiserLens.DelegationWithVotes[][]

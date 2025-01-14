@@ -43,8 +43,10 @@ contract IntegrationTest is Test {
         IGovernorBravo(0x408ED6354d4973f66138C91495F2f2FCbd8724C3);
 
     FranchiserFactory private franchiserFactory;
+    uint safeFutureExpiration;
 
     function setUp() public {
+        safeFutureExpiration = block.timestamp + 1 weeks;
         vm.startPrank(address(0));
         franchiserFactory = new FranchiserFactory(UNI);
         // fund the timelock with 1 ETH to send txs
@@ -58,7 +60,7 @@ contract IntegrationTest is Test {
 
         vm.startPrank(address(TIMELOCK));
         UNI.approve(address(franchiserFactory), quorumVotes);
-        franchiserFactory.fund(Utils.alice, quorumVotes);
+        franchiserFactory.fund(Utils.alice, quorumVotes, safeFutureExpiration);
         vm.stopPrank();
 
         // encode a call to send 1 wei of UNI to alice

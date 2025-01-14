@@ -20,6 +20,9 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
     /// @inheritdoc IFranchiserFactory
     Franchiser public immutable franchiserImplementation;
 
+    /// @inheritdoc IFranchiserFactory
+    mapping(Franchiser => uint256) public expirations;
+
     constructor(IVotingToken votingToken_)
         FranchiserImmutableState(votingToken_)
     {
@@ -50,7 +53,7 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
     }
 
     /// @inheritdoc IFranchiserFactory
-    function fund(address delegatee, uint256 amount)
+    function fund(address delegatee, uint256 amount, uint256 expiration)
         public
         returns (Franchiser franchiser)
     {
@@ -66,6 +69,9 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
                 INITIAL_MAXIMUM_SUBDELEGATEES
             );
         }
+        if (expiration < block.timestamp) revert InvalidExpiration();
+        expirations[franchiser] = expiration;
+
         ERC20(address(votingToken)).safeTransferFrom(
             msg.sender,
             address(franchiser),
@@ -74,7 +80,7 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
     }
 
     /// @inheritdoc IFranchiserFactory
-    function fundMany(address[] calldata delegatees, uint256[] calldata amounts)
+    function fundMany(address[] calldata delegatees, uint256[] calldata amounts, uint256 expiration)
         external
         returns (Franchiser[] memory franchisers)
     {
@@ -84,7 +90,7 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
         franchisers = new Franchiser[](delegatees.length);
         unchecked {
             for (uint256 i = 0; i < delegatees.length; i++)
-                franchisers[i] = fund(delegatees[i], amounts[i]);
+                franchisers[i] = fund(delegatees[i], amounts[i], expiration);
         }
     }
 
@@ -105,6 +111,13 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
             for (uint256 i = 0; i < delegatees.length; i++)
                 recall(delegatees[i], tos[i]);
         }
+    }
+
+    /// @inheritdoc IFranchiserFactory
+    function expiredRecall(address owner, address delegatee) public {
+        Franchiser franchiser = getFranchiser(owner, delegatee);
+        if (block.timestamp < expirations[franchiser]) revert DelegateeNotExpired();
+        if (address(franchiser).isContract()) franchiser.recall(owner);
     }
 
     function permit(
@@ -133,12 +146,13 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
         address delegatee,
         uint256 amount,
         uint256 deadline,
+        uint256 expiration,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external returns (Franchiser) {
         permit(amount, deadline, v, r, s);
-        return fund(delegatee, amount);
+        return fund(delegatee, amount, expiration);
     }
 
     /// @inheritdoc IFranchiserFactory
@@ -146,6 +160,7 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
         address[] calldata delegatees,
         uint256[] calldata amounts,
         uint256 deadline,
+        uint256 expiration,
         uint8 v,
         bytes32 r,
         bytes32 s
@@ -159,7 +174,7 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
         franchisers = new Franchiser[](delegatees.length);
         unchecked {
             for (uint256 i = 0; i < delegatees.length; i++)
-                franchisers[i] = fund(delegatees[i], amounts[i]);
+                franchisers[i] = fund(delegatees[i], amounts[i], expiration);
         }
     }
 }

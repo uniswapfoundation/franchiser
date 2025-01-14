@@ -22,6 +22,11 @@ interface IFranchiserFactory is
     /// @return The Franchiser implementation contract.
     function franchiserImplementation() external view returns (Franchiser);
 
+    /// @notice Returns the `expiration` timestamp for a given `franchiser`.
+    /// @param franchiser The target `franchiser`.
+    /// @return The timestamp when the franchiser's voting power expires.
+    function expirations(Franchiser franchiser) external view returns (uint256);
+
     /// @notice Looks up the Franchiser associated with the `owner` and `delegatee`.
     /// @dev Returns the address of the Franchiser even it it does not yet exist,
     ///      thanks to CREATE2.
@@ -39,8 +44,9 @@ interface IFranchiserFactory is
     ///      If a Franchiser does not yet exist, one is created.
     /// @param delegatee The target `delegatee`.
     /// @param amount The amount of `votingToken` to allocate.
+    /// @param expiration The timestamp when the delegatee's voting power expires.
     /// @return franchiser The Franchiser contract.
-    function fund(address delegatee, uint256 amount)
+    function fund(address delegatee, uint256 amount, uint256 expiration)
         external
         returns (Franchiser franchiser);
 
@@ -48,8 +54,9 @@ interface IFranchiserFactory is
     /// @dev Requires the sender of the call to have approved this contract for sum of `amounts`.
     /// @param delegatees The target `delegatees`.
     /// @param amounts The amounts of `votingToken` to allocate.
+    /// @param expiration The timestamp when the delegatee's voting power expires.
     /// @return franchisers The Franchiser contracts.
-    function fundMany(address[] calldata delegatees, uint256[] calldata amounts)
+    function fundMany(address[] calldata delegatees, uint256[] calldata amounts, uint256 expiration)
         external
         returns (Franchiser[] memory franchisers);
 
@@ -65,6 +72,13 @@ interface IFranchiserFactory is
     function recallMany(address[] calldata delegatees, address[] calldata tos)
         external;
 
+    /// @notice Recalls voting tokens from an expired delegatee back to the owner.
+    /// @dev Can be called by anyone, but only after the delegatee's expiration time has passed.
+    /// @dev Will revert with `DelegateeNotExpired` if called before expiration time.
+    /// @param owner The target `owner`.
+    /// @param delegatee The address of the delegatee whose tokens should be recalled.
+    function expiredRecall(address owner, address delegatee) external;
+
     /// @notice Funds the Franchiser contract associated with the `delegatee`
     ///         using a signature.
     /// @dev The signature must have been produced by the sender of the call.
@@ -72,6 +86,7 @@ interface IFranchiserFactory is
     /// @param delegatee The target `delegatee`.
     /// @param amount The amount of `votingToken` to allocate.
     /// @param deadline A timestamp which the current timestamp must be less than or equal to.
+    /// @param expiration The timestamp when the delegatee's voting power expires.
     /// @param v Must produce valid secp256k1 signature from the holder along with `r` and `s`.
     /// @param r Must produce valid secp256k1 signature from the holder along with `v` and `s`.
     /// @param s Must produce valid secp256k1 signature from the holder along with `v` and `r`.
@@ -80,6 +95,7 @@ interface IFranchiserFactory is
         address delegatee,
         uint256 amount,
         uint256 deadline,
+        uint256 expiration,
         uint8 v,
         bytes32 r,
         bytes32 s
@@ -90,6 +106,7 @@ interface IFranchiserFactory is
     /// @param delegatees The target `delegatees`.
     /// @param amounts The amounts of `votingToken` to allocate.
     /// @param deadline A timestamp which the current timestamp must be less than or equal to.
+    /// @param expiration The timestamp when the delegatee's voting power expires.
     /// @param v Must produce valid secp256k1 signature from the holder along with `r` and `s`.
     /// @param r Must produce valid secp256k1 signature from the holder along with `v` and `s`.
     /// @param s Must produce valid secp256k1 signature from the holder along with `v` and `r`.
@@ -98,6 +115,7 @@ interface IFranchiserFactory is
         address[] calldata delegatees,
         uint256[] calldata amounts,
         uint256 deadline,
+        uint256 expiration,
         uint8 v,
         bytes32 r,
         bytes32 s
