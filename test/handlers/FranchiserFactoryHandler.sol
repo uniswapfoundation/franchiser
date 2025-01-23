@@ -312,6 +312,45 @@ contract FranchiserFactoryHandler is Test {
         delete lastFundedFranchisersArray;
     }
 
+    function factory_expiredRecall(uint256 _fundedFranchiserIndex) external countCall("factory_expiredRecall") {
+        console2.log("\n=== factory_expiredRecall attempt ===");
+        if (fundedFranchisers.length() == 0) {
+            console2.log("No franchisers to recall");
+            return;
+        }
+        _fundedFranchiserIndex = bound(_fundedFranchiserIndex, 0, fundedFranchisers.length() - 1);
+        Franchiser _selectedFranchiser = Franchiser(fundedFranchisers.at(_fundedFranchiserIndex));
+        address _delegatee = _selectedFranchiser.delegatee();
+        address _delegator = _selectedFranchiser.delegator();
+
+        uint256 expiration = factory.expirations(_selectedFranchiser);
+        console2.log("Current timestamp:", block.timestamp);
+        console2.log("Expiration time: ", expiration);
+
+        // If the franchiser hasn't expired yet, warp time to after expiration. This is added to prevent revert, but may not be the best practice in the context of invariant tests
+        if (block.timestamp < expiration) {
+            vm.warp(expiration + 1);
+            console2.log("Warped time to after expiration");
+            console2.log("New timestamp:", block.timestamp);
+        }
+
+        // before the recall, get the total amount delegated by the franchiser to be recalled  (including amounts it may have sub-delegated)
+        uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_selectedFranchiser));
+
+        // decrease the funded franchiser balance mapping and bump the total recalled ghost var by the amount recalled
+        _decreaseFundedFranchiserAccountBalance(_selectedFranchiser, _amountRecalled);
+        ghost_totalRecalled += _amountRecalled;
+
+        // recall of delegated funds to the delegator
+        vm.prank(_delegator);
+        try factory.expiredRecall(_delegator, _delegatee) {
+            console2.log("Expired recall succeeded");
+        } catch Error(string memory reason) {
+            console2.log("Expired recall failed:", reason);
+        }
+        console2.log("=== End of factory_expiredRecall ===\n");
+    }
+
     function factory_permitAndFund(uint256 _delegatorPrivateKey, address _delegatee, uint256 _amount, uint256 _expiration)
         external
         countCall("factory_permitAndFund")
@@ -546,7 +585,7 @@ contract FranchiserFactoryHandler is Test {
                 }
             }
         }
-    } 
+    }
 
     function callSummary() external {
         console2.log("\nCall summary:");
@@ -555,6 +594,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("factory_fundMany", calls["factory_fundMany"].calls);
         console2.log("factory_recall", calls["factory_recall"].calls);
         console2.log("factory_recallMany", calls["factory_recallMany"].calls);
+        console2.log("factory_expiredRecall", calls["factory_expiredRecall"].calls);
         console2.log("factory_permitAndFund", calls["factory_permitAndFund"].calls);
         console2.log("factory_permitAndFundMany", calls["factory_permitAndFundMany"].calls);
         console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
