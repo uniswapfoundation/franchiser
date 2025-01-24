@@ -316,7 +316,7 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         assertEq(votingToken.balanceOf(address(1)), 64);
     }
 
-    function testFuzz_ExpiredRecall_Owner_BalanceUpdated(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _expiredRecallCaller, uint _recallTimestamp) public {
+    function testFuzz_RecallExpired_Owner_BalanceUpdated(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _recallExpiredCaller, uint _recallTimestamp) public {
         vm.assume(_validActorAddress(_owner));
         vm.assume(_delegatee != address(0));
 
@@ -333,13 +333,13 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.warp(_recallTimestamp);
         uint256 _ownerBalanceBeforeRecall = votingToken.balanceOf(_owner);
 
-        vm.prank(_expiredRecallCaller);
-        franchiserFactory.expiredRecall(_owner, _delegatee);
+        vm.prank(_recallExpiredCaller);
+        franchiserFactory.recallExpired(_owner, _delegatee);
 
         assertEq(votingToken.balanceOf(_owner), _ownerBalanceBeforeRecall + _amount);
     }
 
-    function testFuzz_ExpiredRecall_NestedSubDelegatees_BalancesUpdated(address _owner, address _delegatee, address _subDelegatee1, address _subDelegatee2, uint256 _expiration, uint256 _recallTimestamp, address _expiredRecallCaller, uint256 _amount
+    function testFuzz_RecallExpired_NestedSubDelegatees_BalancesUpdated(address _owner, address _delegatee, address _subDelegatee1, address _subDelegatee2, uint256 _expiration, uint256 _recallTimestamp, address _recallExpiredCaller, uint256 _amount
     ) public {
         vm.assume(_validActorAddress(_owner));
         vm.assume(_validActorAddress(_delegatee));
@@ -370,15 +370,15 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.warp(_recallTimestamp);
 
-        vm.prank(_expiredRecallCaller);
-        franchiserFactory.expiredRecall(_owner, _delegatee);
+        vm.prank(_recallExpiredCaller);
+        franchiserFactory.recallExpired(_owner, _delegatee);
         assertEq(votingToken.balanceOf(address(franchiser)), 0);
         assertEq(votingToken.balanceOf(address(_subFranchiser1)), 0);
         assertEq(votingToken.balanceOf(address(_subFranchiser2)), 0);
         assertEq(votingToken.balanceOf(_owner), _amount);
     }
 
-    function testFuzz_RevertIf_ExpiredRecall_CalledBeforeExpiration(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _expiredRecallCaller, uint _recallTimestamp) public {
+    function testFuzz_RevertIf_RecallExpired_CalledBeforeExpiration(address _owner, address _delegatee, uint256 _amount, uint256 _expiration, address _recallExpiredCaller, uint _recallTimestamp) public {
         vm.assume(_validActorAddress(_owner));
         vm.assume(_delegatee != address(0));
 
@@ -395,18 +395,18 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
 
         vm.warp(_recallTimestamp);
 
-        vm.prank(_expiredRecallCaller);
+        vm.prank(_recallExpiredCaller);
         vm.expectRevert(abi.encodeWithSelector(DelegateeNotExpired.selector));
-        franchiserFactory.expiredRecall(_owner, _delegatee);
+        franchiserFactory.recallExpired(_owner, _delegatee);
     }
 
-    function testFuzz_ExpiredRecallMany(
+    function testFuzz_recallManyExpired(
         address _owner,
         address _delegatee1,
         address _delegatee2,
         uint256 _amount,
         uint256 _expiration,
-        address _expiredRecallCaller,
+        address _recallExpiredCaller,
         uint256 _recallTimestamp
     ) public {
         vm.assume(_validActorAddress(_owner));
@@ -436,8 +436,8 @@ contract FranchiserFactoryTest is Test, IFranchiserFactoryErrors, IFranchiserEve
         vm.warp(_recallTimestamp);
         uint256 _ownerBalanceBeforeRecall = votingToken.balanceOf(_owner);
 
-        vm.prank(_expiredRecallCaller);
-        franchiserFactory.expiredRecallMany(owners, delegatees);
+        vm.prank(_recallExpiredCaller);
+        franchiserFactory.recallManyExpired(owners, delegatees);
 
         assertEq(votingToken.balanceOf(_owner), _ownerBalanceBeforeRecall + _amount * 2);
     }

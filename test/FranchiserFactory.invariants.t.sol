@@ -28,8 +28,8 @@ contract FranchiseFactoryInvariantTest is Test {
         selectors[8] = FranchiserFactoryHandler.franchiser_unSubDelegate.selector;
         selectors[9] = FranchiserFactoryHandler.franchiser_unSubDelegateMany.selector;
         selectors[10] = FranchiserFactoryHandler.franchiser_recall.selector;
-        selectors[11] = FranchiserFactoryHandler.factory_expiredRecall.selector;
-        selectors[12] = FranchiserFactoryHandler.factory_expiredRecallMany.selector;
+        selectors[11] = FranchiserFactoryHandler.factory_recallExpired.selector;
+        selectors[12] = FranchiserFactoryHandler.factory_recallManyExpired.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }

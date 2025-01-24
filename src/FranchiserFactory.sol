@@ -114,20 +114,20 @@ contract FranchiserFactory is IFranchiserFactory, FranchiserImmutableState {
     }
 
     /// @inheritdoc IFranchiserFactory
-    function expiredRecall(address owner, address delegatee) public {
+    function recallExpired(address owner, address delegatee) public {
         Franchiser franchiser = getFranchiser(owner, delegatee);
         if (block.timestamp < expirations[franchiser]) revert DelegateeNotExpired();
         if (address(franchiser).isContract()) franchiser.recall(owner);
     }
 
     /// @inheritdoc IFranchiserFactory
-    function expiredRecallMany(address[] calldata owners, address[] calldata delegatees) external {
+    function recallManyExpired(address[] calldata owners, address[] calldata delegatees) external {
         if (delegatees.length != owners.length)
             revert ArrayLengthMismatch(delegatees.length, owners.length);
 
         unchecked {
             for (uint256 i = 0; i < delegatees.length; i++)
-                expiredRecall(owners[i], delegatees[i]);
+                recallExpired(owners[i], delegatees[i]);
         }
     }
 
