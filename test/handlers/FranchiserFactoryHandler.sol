@@ -351,6 +351,36 @@ contract FranchiserFactoryHandler is Test {
         console2.log("=== End of factory_expiredRecall ===\n");
     }
 
+        // This function will do a factory recall call for a subset of the last funded franchisers created by the factory (fundMany or permitAndFundMany)
+        function factory_expiredRecallMany(uint256 _numberFranchisersToRecall) external countCall("factory_expiredRecallMany") {
+            if (lastFundedFranchisersArray.length < 3) {
+                delete lastFundedFranchisersArray;
+                return;
+            }
+            _numberFranchisersToRecall = bound(_numberFranchisersToRecall, 1, lastFundedFranchisersArray.length - 1);
+            address _delegator = lastFundedFranchisersArray[0].delegator();
+            address[] memory _delegateesForRecallMany = new address[](_numberFranchisersToRecall);
+            address[] memory _targetsForRecallMany = new address[](_numberFranchisersToRecall);
+
+            for (uint256 i = 0; i < _numberFranchisersToRecall; i++) {
+                // setup call to recallMany
+                Franchiser _fundedFranchiser = Franchiser(lastFundedFranchisersArray[i]);
+                _delegateesForRecallMany[i] = _fundedFranchiser.delegatee();
+                _targetsForRecallMany[i] = _delegator;
+
+                // decrease the funded franchiser balance mapping by the amount recalled (including amounts it may have sub-delegated)
+                // also bump the total recalled ghost var by the amount recalled
+                uint256 _amountRecalled = getTotalAmountDelegatedByFranchiser(address(_fundedFranchiser));
+                _decreaseFundedFranchiserAccountBalance(_fundedFranchiser, _amountRecalled);
+                ghost_totalRecalled += _amountRecalled;
+            }
+            vm.prank(_delegator);
+            factory.expiredRecallMany(_targetsForRecallMany, _delegateesForRecallMany);
+
+            // empty the lastFundedFranchisersArray, so factory_recallMany can only be called again after a new factory_fundMany
+            delete lastFundedFranchisersArray;
+        }
+
     function factory_permitAndFund(uint256 _delegatorPrivateKey, address _delegatee, uint256 _amount, uint256 _expiration)
         external
         countCall("factory_permitAndFund")
@@ -595,6 +625,7 @@ contract FranchiserFactoryHandler is Test {
         console2.log("factory_recall", calls["factory_recall"].calls);
         console2.log("factory_recallMany", calls["factory_recallMany"].calls);
         console2.log("factory_expiredRecall", calls["factory_expiredRecall"].calls);
+        console2.log("factory_expiredRecallMany", calls["factory_expiredRecallMany"].calls);
         console2.log("factory_permitAndFund", calls["factory_permitAndFund"].calls);
         console2.log("factory_permitAndFundMany", calls["factory_permitAndFundMany"].calls);
         console2.log("franchiser_subDelegate", calls["franchiser_subDelegate"].calls);
